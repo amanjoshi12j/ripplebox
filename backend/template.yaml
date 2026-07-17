@@ -1,0 +1,490 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: RippleBox backend - Cognito auth + single router Lambda + API Gateway HTTP API, talking to Aurora via RDS Data API.
+
+Parameters:
+  DbClusterArn:
+    Type: String
+    Default: arn:aws:rds:ap-southeast-2:763832339774:cluster:ripplebox-cluster
+  DbSecretArn:
+    Type: String
+    Default: arn:aws:secretsmanager:ap-southeast-2:763832339774:secret:rds!cluster-ebd69319-05b3-49a5-9196-58bd3d578865-NzKLrb
+  DbName:
+    Type: String
+    Default: ripplebox
+  # Stripe *test-mode* secret key (starts sk_test_...) - left empty by default
+  # so the stack deploys before Stripe is wired up; the Pay Now path just
+  # 503s cleanly until this is set (see shared/stripe.ts). NoEcho keeps it out
+  # of the CloudFormation console/CLI output.
+  StripeSecretKey:
+    Type: String
+    Default: ""
+    NoEcho: true
+
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    MemorySize: 256
+    # Generous timeout: Aurora Serverless v2 auto-pauses when idle, so the
+    # first Data API call after a quiet period pays a cluster-resume cost on
+    # top of the query itself. Kept under API Gateway's 30s hard ceiling.
+    Timeout: 29
+    Environment:
+      Variables:
+        DB_CLUSTER_ARN: !Ref DbClusterArn
+        DB_SECRET_ARN: !Ref DbSecretArn
+        DB_NAME: !Ref DbName
+        STRIPE_SECRET_KEY: !Ref StripeSecretKey
+        UPLOADS_BUCKET_NAME: !Ref UploadsBucket
+
+Resources:
+  # ---------- Uploads (avatars, salon logos) ----------
+
+  UploadsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      # Public read since these are profile/salon photos displayed in the
+      # app UI - same "cheapest/easiest, tighten later" posture as the wide
+      # open API CORS policy below.
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins: ["*"]
+            AllowedMethods: [PUT, GET]
+            AllowedHeaders: ["*"]
+
+  UploadsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref UploadsBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub "${UploadsBucket.Arn}/*"
+
+  # ---------- Auth ----------
+
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: ripplebox-users
+      UsernameAttributes: [email]
+      AutoVerifiedAttributes: [email]
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: false
+          RequireLowercase: false
+          RequireNumbers: false
+          RequireSymbols: false
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+        - Name: name
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+        - Name: phone_number
+          AttributeDataType: String
+          Required: false
+          Mutable: true
+        # Custom attributes (Cognito exposes these prefixed as "custom:*").
+        # role distinguishes client vs salon_owner; salon_name/business_address
+        # are only read once, by the PostConfirmation trigger, to seed the
+        # salons row for salon_owner signups.
+        - Name: role
+          AttributeDataType: String
+          Mutable: false
+          StringAttributeConstraints:
+            MinLength: "1"
+            MaxLength: "20"
+        - Name: salon_name
+          AttributeDataType: String
+          Mutable: true
+        - Name: business_address
+          AttributeDataType: String
+          Mutable: true
+      LambdaConfig:
+        PostConfirmation: !GetAtt PostConfirmationFunction.Arn
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref UserPool
+      ClientName: ripplebox-web
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      WriteAttributes:
+        - email
+        - name
+        - phone_number
+        - "custom:role"
+        - "custom:salon_name"
+        - "custom:business_address"
+      ReadAttributes:
+        - email
+        - name
+        - phone_number
+        - "custom:role"
+
+  PostConfirmationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ripplebox-backend-post-confirmation
+      CodeUri: .
+      Handler: src/triggers/postConfirmation.handler
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteStatement
+                - rds-data:BatchExecuteStatement
+                - rds-data:BeginTransaction
+                - rds-data:CommitTransaction
+                - rds-data:RollbackTransaction
+              Resource: !Ref DbClusterArn
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref DbSecretArn
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2022
+        EntryPoints:
+          - src/triggers/postConfirmation.ts
+
+  PostConfirmationInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref PostConfirmationFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt UserPool.Arn
+
+  # ---------- API ----------
+
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      # Wide open for now - this is called from a browser SPA with no fixed
+      # origin yet (localhost dev port changes, no prod domain assigned).
+      # Tighten AllowOrigins to the real domain(s) once the frontend ships.
+      CorsConfiguration:
+        AllowOrigins:
+          - "*"
+        AllowMethods:
+          - GET
+          - POST
+          - PATCH
+          - DELETE
+          - OPTIONS
+        AllowHeaders:
+          - Authorization
+          - Content-Type
+        MaxAge: 300
+      Auth:
+        Authorizers:
+          CognitoAuth:
+            JwtConfiguration:
+              issuer: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}"
+              audience:
+                - !Ref UserPoolClient
+            IdentitySource: "$request.header.Authorization"
+        DefaultAuthorizer: CognitoAuth
+
+  RouterFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ripplebox-backend-router
+      CodeUri: .
+      Handler: src/router/index.handler
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteStatement
+                - rds-data:BatchExecuteStatement
+                - rds-data:BeginTransaction
+                - rds-data:CommitTransaction
+                - rds-data:RollbackTransaction
+              Resource: !Ref DbClusterArn
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref DbSecretArn
+            - Effect: Allow
+              Action: s3:PutObject
+              Resource: !Sub "${UploadsBucket.Arn}/*"
+      Events:
+        GetSalons:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /salons
+            Method: get
+            Auth:
+              Authorizer: NONE
+        GetMe:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /me
+            Method: get
+        UpdateMe:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /me
+            Method: patch
+        GetSalonRewards:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /salons/{salonId}/rewards
+            Method: get
+            Auth:
+              Authorizer: NONE
+        RedeemReward:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /rewards/redeem
+            Method: post
+        GetSalonMe:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /salon/me
+            Method: get
+        UpdateSalonMe:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /salon/me
+            Method: patch
+        LogVisit:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /visits
+            Method: post
+        GetSalonClients:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /salon/clients
+            Method: get
+        GetSalonRewardsManage:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /salon/rewards
+            Method: get
+        CreateSalonReward:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /salon/rewards
+            Method: post
+        UpdateSalonReward:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /salon/rewards/{rewardId}
+            Method: patch
+        DeleteSalonReward:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /salon/rewards/{rewardId}
+            Method: delete
+        GetSalonServicesManage:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /salon/services
+            Method: get
+        CreateSalonService:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /salon/services
+            Method: post
+        UpdateSalonService:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /salon/services/{serviceId}
+            Method: patch
+        DeleteSalonService:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /salon/services/{serviceId}
+            Method: delete
+        ApplyReferral:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /referrals/apply
+            Method: post
+        GetMyReferrals:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /me/referrals
+            Method: get
+        GetSalonCampaigns:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /salon/campaigns
+            Method: get
+        CreateSalonCampaign:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /salon/campaigns
+            Method: post
+        UpdateSalonCampaign:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /salon/campaigns/{campaignId}
+            Method: patch
+        GetNotifications:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /notifications
+            Method: get
+        MarkNotificationRead:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /notifications/{notificationId}/read
+            Method: patch
+        MarkAllNotificationsRead:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /notifications/read-all
+            Method: patch
+        GetSalonReferralAnalytics:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /salon/referral-analytics
+            Method: get
+        GetSalonDashboardStats:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /salon/dashboard-stats
+            Method: get
+        GetMyFavorites:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /me/favorites
+            Method: get
+        AddFavorite:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /favorites/{salonId}
+            Method: post
+        RemoveFavorite:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /favorites/{salonId}
+            Method: delete
+        CreateAppointment:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /appointments
+            Method: post
+        GetMyAppointments:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /me/appointments
+            Method: get
+        GetSalonAppointments:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /salon/appointments
+            Method: get
+        UpdateSalonAppointmentStatus:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /salon/appointments/{appointmentId}
+            Method: patch
+        CancelMyAppointment:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /appointments/{appointmentId}/cancel
+            Method: patch
+        CreatePaymentIntent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /payments/create-intent
+            Method: post
+        GetUploadUrl:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /uploads/presign
+            Method: post
+        UpdateMyAvatar:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /me/avatar
+            Method: patch
+        UpdateSalonLogo:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /salon/me/logo
+            Method: patch
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2022
+        EntryPoints:
+          - src/router/index.ts
+
+Outputs:
+  ApiUrl:
+    Description: Base URL of the HTTP API
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+  UserPoolId:
+    Value: !Ref UserPool
+  UserPoolClientId:
+    Value: !Ref UserPoolClient

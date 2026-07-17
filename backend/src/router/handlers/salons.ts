@@ -1,0 +1,43 @@
+import type { APIGatewayProxyResultV2 } from "aws-lambda";
+import { query } from "../../shared/db";
+
+export async function getSalons(): Promise<APIGatewayProxyResultV2> {
+  // Two queries + in-memory grouping instead of a JSON-aggregating join -
+  // Data API's Field type doesn't cleanly carry Postgres arrays through our
+  // db.ts helper, and salon_services is small enough that fetching it whole
+  // is simpler than adding array-parameter/array-result handling for it.
+  const [salonRows, serviceRows] = await Promise.all([
+    query(
+      `SELECT id, name, address, description, image_url, reward_multiplier, rating, review_count
+       FROM salons
+       ORDER BY name`
+    ),
+    query(`SELECT id, salon_id, name, price FROM salon_services ORDER BY created_at`),
+  ]);
+
+  const servicesBySalon = new Map<string, { id: string; name: string; price: string }[]>();
+  for (const row of serviceRows) {
+    const salonId = row.salon_id as string;
+    const list = servicesBySalon.get(salonId) ?? [];
+    list.push({ id: row.id as string, name: row.name as string, price: row.price as string });
+    servicesBySalon.set(salonId, list);
+  }
+
+  return {
+    statusCode: 200,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(
+      salonRows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        address: r.address,
+        description: r.description,
+        image: r.image_url,
+        rewardMultiplier: r.reward_multiplier,
+        rating: r.rating,
+        reviewCount: r.review_count,
+        services: servicesBySalon.get(r.id as string) ?? [],
+      }))
+    ),
+  };
+}
