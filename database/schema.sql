@@ -35,6 +35,12 @@ CREATE TABLE salons (
     owner_user_id       UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
     name                TEXT NOT NULL,
     address             TEXT,
+    -- Owner-set GPS coordinates (captured via the browser's Geolocation API
+    -- while physically at the salon - not geocoded from `address`, so this
+    -- can be null even when address is filled in). Address-to-coordinates
+    -- geocoding is a paid/rate-limited API integration, deferred on purpose.
+    latitude            NUMERIC(9,6),
+    longitude           NUMERIC(9,6),
     phone               TEXT,
     email               TEXT,
     description         TEXT,

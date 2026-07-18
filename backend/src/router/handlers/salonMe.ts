@@ -7,7 +7,7 @@ import { HttpError } from "../../shared/httpError";
 
 async function fetchSalonMeResponse(ownerId: string) {
   const rows = await query(
-    `SELECT id, name, address, phone, email, description, image_url, reward_multiplier, rating, review_count
+    `SELECT id, name, address, latitude, longitude, phone, email, description, image_url, reward_multiplier, rating, review_count
      FROM salons
      WHERE owner_user_id = :ownerId::uuid`,
     { ownerId }
@@ -19,6 +19,8 @@ async function fetchSalonMeResponse(ownerId: string) {
     id: salon.id,
     name: salon.name,
     address: salon.address,
+    latitude: salon.latitude,
+    longitude: salon.longitude,
     phone: salon.phone,
     email: salon.email,
     description: salon.description,
@@ -86,6 +88,46 @@ export async function updateSalonMe(
       email: (email as string | null) ?? null,
       description: (description as string | null) ?? null,
     }
+  );
+  if (updated === 0) {
+    throw new HttpError(404, "No salon found for this account");
+  }
+
+  const salon = await fetchSalonMeResponse(ownerId);
+  return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify(salon) };
+}
+
+export async function updateSalonLocation(
+  event: APIGatewayProxyEventV2WithJWTAuthorizer
+): Promise<APIGatewayProxyResultV2> {
+  const ownerId = event.requestContext.authorizer?.jwt?.claims?.sub as string | undefined;
+  if (!ownerId) {
+    return { statusCode: 401, body: JSON.stringify({ error: "Unauthorized" }) };
+  }
+
+  let latitude: unknown, longitude: unknown;
+  try {
+    const body = event.body ? JSON.parse(event.body) : {};
+    ({ latitude, longitude } = body);
+  } catch {
+    throw new HttpError(400, "Invalid request body");
+  }
+  if (
+    typeof latitude !== "number" ||
+    typeof longitude !== "number" ||
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    latitude < -90 ||
+    latitude > 90 ||
+    longitude < -180 ||
+    longitude > 180
+  ) {
+    throw new HttpError(400, "latitude/longitude must be valid coordinates");
+  }
+
+  const updated = await execute(
+    `UPDATE salons SET latitude = :latitude, longitude = :longitude WHERE owner_user_id = :ownerId::uuid`,
+    { ownerId, latitude, longitude }
   );
   if (updated === 0) {
     throw new HttpError(404, "No salon found for this account");

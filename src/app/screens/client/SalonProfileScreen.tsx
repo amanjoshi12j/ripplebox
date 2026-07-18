@@ -10,12 +10,14 @@ import {
   Share2,
   Gift,
   Loader2,
+  Navigation,
 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { ImageWithFallback } from "../../components/figma/ImageWithFallback";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../../components/ui/tabs";
 import { useAuth } from "../../context/AuthContext";
 import { getSalons, getMe, getMyFavorites, addFavorite, removeFavorite, type SalonSummary } from "../../lib/apiClient";
+import { getCurrentPosition, distanceKm, formatDistanceKm, directionsUrl } from "../../lib/geo";
 
 export function SalonProfileScreen() {
   const navigate = useNavigate();
@@ -26,6 +28,7 @@ export function SalonProfileScreen() {
   const [points, setPoints] = useState(0);
   const [isFavorite, setIsFavorite] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const [myDistanceKm, setMyDistanceKm] = useState<number | null>(null);
 
   useEffect(() => {
     if (!id || !auth.idToken) return;
@@ -40,6 +43,19 @@ export function SalonProfileScreen() {
       })
       .catch(() => setLoadError(true));
   }, [id, auth.idToken]);
+
+  // Best-effort - if the salon has no saved location, or the client denies
+  // location access, we just don't show a distance. Not worth an error toast.
+  useEffect(() => {
+    if (!salon || salon.latitude === null || salon.longitude === null) return;
+    getCurrentPosition()
+      .then((position) => {
+        setMyDistanceKm(
+          distanceKm(position.coords.latitude, position.coords.longitude, parseFloat(salon.latitude!), parseFloat(salon.longitude!))
+        );
+      })
+      .catch(() => {});
+  }, [salon]);
 
   const toggleFavorite = () => {
     if (!auth.idToken || !salon) return;
@@ -135,9 +151,27 @@ export function SalonProfileScreen() {
         {/* Contact info */}
         <div className="space-y-3 mb-6">
           {salon.address && (
-            <div className="flex items-center gap-3 text-gray-600 dark:text-gray-400">
-              <MapPin size={20} className="text-[#e6d7f5] dark:text-purple-400" />
-              <span className="text-sm">{salon.address}</span>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 text-gray-600 dark:text-gray-400">
+                <MapPin size={20} className="text-[#e6d7f5] dark:text-purple-400" />
+                <span className="text-sm">
+                  {salon.address}
+                  {myDistanceKm !== null && (
+                    <span className="text-[#c9a3e8] dark:text-purple-400"> · {formatDistanceKm(myDistanceKm)}</span>
+                  )}
+                </span>
+              </div>
+              {salon.latitude !== null && salon.longitude !== null && (
+                <a
+                  href={directionsUrl(parseFloat(salon.latitude), parseFloat(salon.longitude))}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-shrink-0 flex items-center gap-1 text-xs text-[#2d2d2d] dark:text-gray-100 bg-[#f5f0fc] dark:bg-purple-900/30 px-3 py-1.5 rounded-full hover:bg-[#e6d7f5]/50 dark:hover:bg-purple-900/50 transition-colors"
+                >
+                  <Navigation size={12} />
+                  Directions
+                </a>
+              )}
             </div>
           )}
           <div className="flex items-center gap-3 text-gray-600 dark:text-gray-400">

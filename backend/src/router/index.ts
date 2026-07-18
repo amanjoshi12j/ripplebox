@@ -6,7 +6,7 @@ import { getSalons } from "./handlers/salons";
 import { getMe, updateMe, updateMyAvatar } from "./handlers/me";
 import { getSalonRewards } from "./handlers/salonRewards";
 import { redeemReward } from "./handlers/redeemReward";
-import { getSalonMe, updateSalonMe, updateSalonLogo } from "./handlers/salonMe";
+import { getSalonMe, updateSalonMe, updateSalonLogo, updateSalonLocation } from "./handlers/salonMe";
 import { logVisit } from "./handlers/visits";
 import { getSalonClients } from "./handlers/salonClients";
 import {
@@ -89,6 +89,7 @@ const routes: Record<string, RouteHandler> = {
   "POST /uploads/presign": getUploadUrl,
   "PATCH /me/avatar": updateMyAvatar,
   "PATCH /salon/me/logo": updateSalonLogo,
+  "PATCH /salon/me/location": updateSalonLocation,
 };
 
 export async function handler(

@@ -1,15 +1,14 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { Search, Star, Heart, Sparkles, Loader2 } from "lucide-react";
+import { Search, Star, Heart, Sparkles, Loader2, Navigation } from "lucide-react";
 import { Input } from "../../components/ui/input";
 import { ImageWithFallback } from "../../components/figma/ImageWithFallback";
 import { Badge } from "../../components/ui/badge";
 import { useAuth } from "../../context/AuthContext";
 import { getSalons, getMyFavorites, addFavorite, removeFavorite, type SalonSummary } from "../../lib/apiClient";
+import { getCurrentPosition, distanceKm, formatDistanceKm } from "../../lib/geo";
 
-// "nearby" dropped - no geo/distance data in the backend yet, unlike the
-// other filters which map directly to real salon fields.
-type FilterType = "all" | "topRated" | "favorites";
+type FilterType = "all" | "topRated" | "favorites" | "nearby";
 
 export function SalonsScreen() {
   const navigate = useNavigate();
@@ -19,6 +18,8 @@ export function SalonsScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFilter, setSelectedFilter] = useState<FilterType>("all");
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [myPosition, setMyPosition] = useState<{ lat: number; lon: number } | null>(null);
+  const [locationDenied, setLocationDenied] = useState(false);
 
   useEffect(() => {
     if (!auth.idToken) return;
@@ -29,6 +30,26 @@ export function SalonsScreen() {
       })
       .catch(() => setLoadError(true));
   }, [auth.idToken]);
+
+  const distanceToSalon = (salon: SalonSummary): number | null => {
+    if (!myPosition || salon.latitude === null || salon.longitude === null) return null;
+    return distanceKm(myPosition.lat, myPosition.lon, parseFloat(salon.latitude), parseFloat(salon.longitude));
+  };
+
+  const handleNearbyFilter = async () => {
+    if (myPosition) {
+      setSelectedFilter("nearby");
+      return;
+    }
+    try {
+      const position = await getCurrentPosition();
+      setMyPosition({ lat: position.coords.latitude, lon: position.coords.longitude });
+      setLocationDenied(false);
+      setSelectedFilter("nearby");
+    } catch {
+      setLocationDenied(true);
+    }
+  };
 
   const toggleFavorite = (salonId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -51,6 +72,18 @@ export function SalonsScreen() {
         break;
       case "favorites":
         filtered = filtered.filter((salon) => favorites.includes(salon.id));
+        break;
+      case "nearby":
+        // Salons without a saved location sort to the end rather than being
+        // hidden - the owner just hasn't tapped "Save My Location" yet.
+        filtered = [...filtered].sort((a, b) => {
+          const da = distanceToSalon(a);
+          const db = distanceToSalon(b);
+          if (da === null && db === null) return 0;
+          if (da === null) return 1;
+          if (db === null) return -1;
+          return da - db;
+        });
         break;
       case "all":
       default:
@@ -125,7 +158,25 @@ export function SalonsScreen() {
           >
             Favorites
           </Badge>
+          <Badge
+            onClick={handleNearbyFilter}
+            variant="outline"
+            className={`cursor-pointer whitespace-nowrap flex items-center gap-1 ${
+              selectedFilter === "nearby"
+                ? "bg-gradient-to-r from-[#e6d7f5] to-[#f5d7e3] dark:from-purple-500 dark:to-pink-500 text-[#2d2d2d] dark:text-white border-transparent"
+                : "dark:border-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+            }`}
+          >
+            <Navigation size={12} />
+            Nearby
+          </Badge>
         </div>
+
+        {locationDenied && (
+          <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">
+            Enable location access for this site to sort salons by distance.
+          </p>
+        )}
 
         {/* Salons list */}
         <div className="space-y-4">
@@ -146,7 +197,9 @@ export function SalonsScreen() {
               <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">
                 {selectedFilter === "favorites"
                   ? "You haven't added any favorites yet"
-                  : "Try adjusting your search or filters"}
+                  : selectedFilter === "nearby" && !myPosition
+                    ? "Enable location access to sort salons by distance"
+                    : "Try adjusting your search or filters"}
               </p>
             </div>
           ) : (
@@ -195,7 +248,15 @@ export function SalonsScreen() {
                   </div>
                 )}
 
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">{salon.address}</p>
+                <div className="mb-3">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{salon.address}</p>
+                  {distanceToSalon(salon) !== null && (
+                    <p className="text-xs text-[#c9a3e8] dark:text-purple-400 flex items-center gap-1 mt-0.5">
+                      <Navigation size={12} />
+                      {formatDistanceKm(distanceToSalon(salon)!)}
+                    </p>
+                  )}
+                </div>
 
                 <div className="flex flex-wrap gap-2">
                   {salon.services.slice(0, 3).map((service) => (

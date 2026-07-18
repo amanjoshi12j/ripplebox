@@ -23,6 +23,8 @@ export interface SalonSummary {
   id: string;
   name: string;
   address: string | null;
+  latitude: string | null;
+  longitude: string | null;
   description: string | null;
   image: string | null;
   rewardMultiplier: string;
@@ -96,6 +98,8 @@ export interface SalonMeResponse {
   id: string;
   name: string;
   address: string | null;
+  latitude: string | null;
+  longitude: string | null;
   phone: string | null;
   email: string | null;
   description: string | null;
@@ -127,6 +131,10 @@ export function updateMyAvatar(idToken: string, avatarUrl: string): Promise<MeRe
 
 export function updateSalonLogo(idToken: string, imageUrl: string): Promise<SalonMeResponse> {
   return apiFetch<SalonMeResponse>("/salon/me/logo", { idToken, method: "PATCH", body: { imageUrl } });
+}
+
+export function updateSalonLocation(idToken: string, latitude: number, longitude: number): Promise<SalonMeResponse> {
+  return apiFetch<SalonMeResponse>("/salon/me/location", { idToken, method: "PATCH", body: { latitude, longitude } });
 }
 
 // Uploads a photo straight to S3 via a short-lived presigned URL (the image

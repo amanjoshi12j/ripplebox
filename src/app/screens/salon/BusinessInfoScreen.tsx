@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { ArrowLeft, Store, User, Mail, Phone, MapPin, Save, Loader2, Camera } from "lucide-react";
+import { ArrowLeft, Store, User, Mail, Phone, MapPin, Save, Loader2, Camera, LocateFixed, CheckCircle2 } from "lucide-react";
 import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import { ImageWithFallback } from "../../components/figma/ImageWithFallback";
@@ -13,9 +13,11 @@ import {
   updateSalonMe,
   uploadImage,
   updateSalonLogo,
+  updateSalonLocation,
   type MeResponse,
   type SalonMeResponse,
 } from "../../lib/apiClient";
+import { getCurrentPosition } from "../../lib/geo";
 
 export function BusinessInfoScreen() {
   const navigate = useNavigate();
@@ -27,6 +29,7 @@ export function BusinessInfoScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [isSavingLocation, setIsSavingLocation] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form fields
@@ -104,6 +107,31 @@ export function BusinessInfoScreen() {
       toast.error(err instanceof Error ? err.message : "Couldn't update your salon logo.");
     } finally {
       setIsUploadingLogo(false);
+    }
+  };
+
+  const handleSaveLocation = async () => {
+    if (!auth.idToken) return;
+    setIsSavingLocation(true);
+    try {
+      const position = await getCurrentPosition();
+      const updated = await updateSalonLocation(
+        auth.idToken,
+        position.coords.latitude,
+        position.coords.longitude
+      );
+      setSalon(updated);
+      toast.success("Salon location saved! Clients can now see distance and directions.");
+    } catch (err) {
+      const message =
+        err instanceof GeolocationPositionError
+          ? "Couldn't get your location - check that location access is allowed for this site."
+          : err instanceof Error
+            ? err.message
+            : "Couldn't save your location right now.";
+      toast.error(message);
+    } finally {
+      setIsSavingLocation(false);
     }
   };
 
@@ -252,6 +280,44 @@ export function BusinessInfoScreen() {
               className="h-12 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 disabled:opacity-60 disabled:cursor-not-allowed"
               placeholder="Enter your business address"
             />
+          </div>
+
+          {/* GPS location - separate from the form above, saves immediately on tap */}
+          <div className="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                  {salon.latitude !== null && salon.longitude !== null ? (
+                    <>
+                      <CheckCircle2 size={16} className="text-green-500" />
+                      Location saved
+                    </>
+                  ) : (
+                    <>
+                      <LocateFixed size={16} className="text-gray-400" />
+                      No location saved yet
+                    </>
+                  )}
+                </p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                  Lets clients see distance and get directions to your salon
+                </p>
+              </div>
+              <Button
+                type="button"
+                onClick={handleSaveLocation}
+                disabled={isSavingLocation}
+                variant="outline"
+                className="border-2 border-[#d4af37]/40 dark:border-amber-500/40 text-[#2d2d2d] dark:text-gray-100 rounded-xl whitespace-nowrap"
+              >
+                {isSavingLocation ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <LocateFixed size={16} className="mr-1" />
+                )}
+                {salon.latitude !== null ? "Update" : "Save My Location"}
+              </Button>
+            </div>
           </div>
 
           {saveError && <p className="text-sm text-red-500 dark:text-red-400">{saveError}</p>}

@@ -8,7 +8,7 @@ export async function getSalons(): Promise<APIGatewayProxyResultV2> {
   // is simpler than adding array-parameter/array-result handling for it.
   const [salonRows, serviceRows] = await Promise.all([
     query(
-      `SELECT id, name, address, description, image_url, reward_multiplier, rating, review_count
+      `SELECT id, name, address, latitude, longitude, description, image_url, reward_multiplier, rating, review_count
        FROM salons
        ORDER BY name`
     ),
@@ -39,6 +39,8 @@ export async function getSalons(): Promise<APIGatewayProxyResultV2> {
         id: r.id,
         name: r.name,
         address: r.address,
+        latitude: r.latitude,
+        longitude: r.longitude,
         description: r.description,
         image: r.image_url,
         rewardMultiplier: r.reward_multiplier,
