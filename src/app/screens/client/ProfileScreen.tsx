@@ -10,7 +10,6 @@ import {
   LogOut,
   ChevronRight,
   Award,
-  CreditCard,
   Loader2,
 } from "lucide-react";
 import { ImageWithFallback } from "../../components/figma/ImageWithFallback";
@@ -45,11 +44,6 @@ export function ProfileScreen() {
       icon: Calendar,
       label: "My Appointments",
       action: () => navigate("/client/appointments"),
-    },
-    {
-      icon: CreditCard,
-      label: "Payment Methods",
-      action: () => {},
     },
     {
       icon: Award,

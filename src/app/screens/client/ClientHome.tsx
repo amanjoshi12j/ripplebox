@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router";
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { Share2, Gift, TrendingUp, Sparkles, Heart, Loader2 } from "lucide-react";
+import { Share2, Gift, Calendar, Sparkles, Heart, Loader2 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Progress } from "../../components/ui/progress";
 import { Badge } from "../../components/ui/badge";
@@ -146,10 +146,11 @@ export function ClientHome() {
 
           <motion.button
             whileTap={{ scale: 0.94 }}
+            onClick={() => navigate("/client/appointments")}
             className="bg-gradient-to-br from-[#f5e6c3] to-[#d4af37]/20 dark:from-amber-500 dark:to-yellow-500 rounded-2xl p-4 text-center hover:shadow-md transition-shadow border border-transparent dark:border-gray-700"
           >
-            <TrendingUp size={24} className="mx-auto mb-2 text-[#2d2d2d] dark:text-white" />
-            <span className="text-xs text-[#2d2d2d] dark:text-white">Activity</span>
+            <Calendar size={24} className="mx-auto mb-2 text-[#2d2d2d] dark:text-white" />
+            <span className="text-xs text-[#2d2d2d] dark:text-white">Appointments</span>
           </motion.button>
         </motion.div>
 
