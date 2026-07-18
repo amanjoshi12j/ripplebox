@@ -249,6 +249,12 @@ CREATE INDEX idx_appointments_client ON appointments(client_id, appointment_date
 -- time (appointments.points_awarded) and skip awarding them again.
 ALTER TABLE visits ADD COLUMN appointment_id UUID REFERENCES appointments(id);
 
+-- One appointment can be linked to at most one visit, ever - a plain UNIQUE
+-- constraint would also reject multiple NULLs (most visits have no linked
+-- appointment at all), so this is a partial index instead, only enforcing
+-- uniqueness among the non-null values.
+CREATE UNIQUE INDEX idx_visits_appointment_id_unique ON visits(appointment_id) WHERE appointment_id IS NOT NULL;
+
 -- ============================================================
 -- Notes:
 -- - Every earn/redeem must run inside a single DB transaction that

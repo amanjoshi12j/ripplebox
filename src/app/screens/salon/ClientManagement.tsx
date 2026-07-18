@@ -18,9 +18,11 @@ import { useAuth } from "../../context/AuthContext";
 import {
   getSalonClients,
   getSalonServicesManage,
+  getSalonAppointments,
   logVisit,
   type SalonClient,
   type ManagedService,
+  type SalonAppointment,
 } from "../../lib/apiClient";
 
 type FilterType = "all" | "topSpenders" | "recent";
@@ -32,11 +34,13 @@ export function ClientManagement() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFilter, setSelectedFilter] = useState<FilterType>("all");
   const [services, setServices] = useState<ManagedService[]>([]);
+  const [appointments, setAppointments] = useState<SalonAppointment[]>([]);
 
   const [isLogVisitOpen, setIsLogVisitOpen] = useState(false);
   const [visitEmail, setVisitEmail] = useState("");
   const [visitAmount, setVisitAmount] = useState("");
   const [visitServiceId, setVisitServiceId] = useState("");
+  const [visitAppointmentId, setVisitAppointmentId] = useState("");
   const [isSubmittingVisit, setIsSubmittingVisit] = useState(false);
   const [visitError, setVisitError] = useState<string | null>(null);
 
@@ -57,7 +61,24 @@ export function ClientManagement() {
         // Non-fatal - Log Visit just falls back to the dollar-only flow
         // below if this salon has no services defined yet.
       });
+    getSalonAppointments(auth.idToken)
+      .then(setAppointments)
+      .catch(() => {
+        // Non-fatal - just means the "link to a paid appointment" picker
+        // below won't have anything to offer.
+      });
   }, [auth.idToken]);
+
+  // Pay Now appointments that already paid out points and haven't been
+  // linked to a visit yet - logging a visit for one of these must not
+  // award points a second time (see logVisit's appointmentId handling).
+  const linkableAppointments = appointments.filter(
+    (a) =>
+      a.clientEmail.trim().toLowerCase() === visitEmail.trim().toLowerCase() &&
+      a.pointsAwarded > 0 &&
+      !a.visitLogged &&
+      (a.status === "pending" || a.status === "confirmed")
+  );
 
   const handleServiceSelect = (serviceId: string) => {
     setVisitServiceId(serviceId);
@@ -66,6 +87,15 @@ export function ClientManagement() {
     const service = services.find((s) => s.id === serviceId);
     if (service && !visitAmount) {
       setVisitAmount(String(parseFloat(service.price)));
+    }
+  };
+
+  const handleAppointmentLink = (appointmentId: string) => {
+    setVisitAppointmentId(appointmentId);
+    const appt = appointments.find((a) => a.id === appointmentId);
+    if (appt) {
+      setVisitServiceId(appt.serviceId);
+      setVisitAmount(String(parseFloat(appt.price)));
     }
   };
 
@@ -82,12 +112,23 @@ export function ClientManagement() {
     setIsSubmittingVisit(true);
     try {
       const amount = parseFloat(visitAmount);
-      const result = await logVisit(auth.idToken, visitEmail, amount, visitServiceId || undefined);
-      toast.success(`Logged visit - awarded ${result.pointsEarned} points`);
+      const result = await logVisit(
+        auth.idToken,
+        visitEmail,
+        amount,
+        visitServiceId || undefined,
+        visitAppointmentId || undefined
+      );
+      toast.success(
+        visitAppointmentId
+          ? "Logged visit - points were already awarded when this booking was paid"
+          : `Logged visit - awarded ${result.pointsEarned} points`
+      );
       setIsLogVisitOpen(false);
       setVisitEmail("");
       setVisitAmount("");
       setVisitServiceId("");
+      setVisitAppointmentId("");
       await loadClients();
     } catch (err) {
       setVisitError(err instanceof Error ? err.message : "Something went wrong logging this visit.");
@@ -304,14 +345,40 @@ export function ClientManagement() {
                 type="email"
                 placeholder="client@example.com"
                 value={visitEmail}
-                onChange={(e) => setVisitEmail(e.target.value)}
+                onChange={(e) => {
+                  setVisitEmail(e.target.value);
+                  setVisitAppointmentId("");
+                }}
                 required
               />
             </div>
+            {linkableAppointments.length > 0 && (
+              <div>
+                <Label className="block text-sm mb-2 text-gray-600 dark:text-gray-300">
+                  Link to a paid appointment (optional)
+                </Label>
+                <Select value={visitAppointmentId} onValueChange={handleAppointmentLink}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Not linked to a booking" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {linkableAppointments.map((appt) => (
+                      <SelectItem key={appt.id} value={appt.id}>
+                        {appt.serviceName} - {appt.date} ({appt.pointsAwarded} pts already paid)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                  This client already paid for and earned points on a matching booking - link it so
+                  they don't get awarded twice.
+                </p>
+              </div>
+            )}
             {services.length > 0 && (
               <div>
                 <Label className="block text-sm mb-2 text-gray-600 dark:text-gray-300">Service</Label>
-                <Select value={visitServiceId} onValueChange={handleServiceSelect}>
+                <Select value={visitServiceId} onValueChange={handleServiceSelect} disabled={!!visitAppointmentId}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Choose a service" />
                   </SelectTrigger>
@@ -328,6 +395,7 @@ export function ClientManagement() {
             <div>
               <label className="block text-sm mb-2 text-gray-600 dark:text-gray-300">Amount Spent ($)</label>
               <Input
+                disabled={!!visitAppointmentId}
                 type="number"
                 min="0.01"
                 step="0.01"

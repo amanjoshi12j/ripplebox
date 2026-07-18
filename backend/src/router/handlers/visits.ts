@@ -23,11 +23,13 @@ export async function logVisit(
   let clientEmail: unknown;
   let amountSpent: unknown;
   let serviceId: unknown;
+  let appointmentId: unknown;
   try {
     const body = event.body ? JSON.parse(event.body) : {};
     clientEmail = body.clientEmail;
     amountSpent = body.amountSpent;
     serviceId = body.serviceId;
+    appointmentId = body.appointmentId;
   } catch {
     throw new HttpError(400, "Invalid request body");
   }
@@ -39,6 +41,9 @@ export async function logVisit(
   }
   if (serviceId !== undefined && serviceId !== null && !isUuid(serviceId)) {
     throw new HttpError(400, "serviceId must be a valid id");
+  }
+  if (appointmentId !== undefined && appointmentId !== null && !isUuid(appointmentId)) {
+    throw new HttpError(400, "appointmentId must be a valid id");
   }
 
   // Scoping by "does this caller own a salon" is the authorization check
@@ -67,6 +72,28 @@ export async function logVisit(
   }
   const clientId = client.id as string;
 
+  // Linking to a specific pre-paid (pay_now) appointment means points were
+  // already awarded the moment that appointment was paid for (see
+  // createAppointment in appointments.ts) - logging the visit it fulfills
+  // must NOT award points again. A DB-level unique index on
+  // visits.appointment_id also blocks the same appointment ever being
+  // linked to two visits, as a hard backstop beyond this check.
+  let linkedAppointment: Record<string, unknown> | undefined;
+  if (appointmentId) {
+    const apptRows = await query(
+      `SELECT id, points_awarded FROM appointments
+       WHERE id = :appointmentId::uuid AND client_id = :clientId::uuid AND salon_id = :salonId::uuid`,
+      { appointmentId, clientId, salonId }
+    );
+    linkedAppointment = apptRows[0];
+    if (!linkedAppointment) throw new HttpError(404, "Appointment not found for this client");
+
+    const alreadyLogged = await query(`SELECT id FROM visits WHERE appointment_id = :appointmentId::uuid`, {
+      appointmentId,
+    });
+    if (alreadyLogged[0]) throw new HttpError(400, "This appointment has already been logged as a visit");
+  }
+
   // A picked service earns its own fixed points_value (set by the owner in
   // Services Management) instead of the old flat dollar-based formula -
   // lets different services be worth different amounts, e.g. a haircut vs a
@@ -74,7 +101,9 @@ export async function logVisit(
   // picked, for backward compatibility with salons that haven't set any
   // services up yet.
   let pointsEarned: number;
-  if (serviceId) {
+  if (linkedAppointment && (linkedAppointment.points_awarded as number) > 0) {
+    pointsEarned = 0;
+  } else if (serviceId) {
     const serviceRows = await query(
       `SELECT points_value FROM salon_services WHERE id = :serviceId::uuid AND salon_id = :salonId::uuid`,
       { serviceId, salonId }
@@ -108,10 +137,18 @@ export async function logVisit(
     const source = referral ? "referral" : "direct";
 
     const visitRows = await query(
-      `INSERT INTO visits (client_id, salon_id, logged_by, amount_spent, points_earned, source)
-       VALUES (:clientId::uuid, :salonId::uuid, :ownerId::uuid, :amountSpent, :pointsEarned, :source::visit_source)
+      `INSERT INTO visits (client_id, salon_id, logged_by, amount_spent, points_earned, source, appointment_id)
+       VALUES (:clientId::uuid, :salonId::uuid, :ownerId::uuid, :amountSpent, :pointsEarned, :source::visit_source, :appointmentId::uuid)
        RETURNING id`,
-      { clientId, salonId, ownerId, amountSpent, pointsEarned, source },
+      {
+        clientId,
+        salonId,
+        ownerId,
+        amountSpent,
+        pointsEarned,
+        source,
+        appointmentId: (appointmentId as string | undefined) ?? null,
+      },
       tx
     );
     const visitId = visitRows[0].id as string;
@@ -139,18 +176,24 @@ export async function logVisit(
     );
     const newBalance = balanceRows[0].points as number;
 
-    await execute(
-      `INSERT INTO point_transactions (client_id, salon_id, type, points_delta, reference_id, note)
-       VALUES (:clientId::uuid, :salonId::uuid, 'earn_visit', :pointsEarned, :visitId::uuid, :note)`,
-      {
-        clientId,
-        salonId,
-        pointsEarned,
-        visitId,
-        note: `Visit: $${amountSpent.toFixed(2)} spent`,
-      },
-      tx
-    );
+    // Skip the ledger entry entirely when there's nothing to record - a
+    // linked appointment that already paid out its points at booking time
+    // (see the pointsEarned = 0 case above) shouldn't get a zero-value
+    // "earn_visit" row cluttering the audit trail.
+    if (pointsEarned > 0) {
+      await execute(
+        `INSERT INTO point_transactions (client_id, salon_id, type, points_delta, reference_id, note)
+         VALUES (:clientId::uuid, :salonId::uuid, 'earn_visit', :pointsEarned, :visitId::uuid, :note)`,
+        {
+          clientId,
+          salonId,
+          pointsEarned,
+          visitId,
+          note: `Visit: $${amountSpent.toFixed(2)} spent`,
+        },
+        tx
+      );
+    }
 
     if (referral) {
       const referrerId = referral.referrer_id as string;
@@ -194,7 +237,10 @@ export async function logVisit(
       );
     }
 
-    await insertNotification(
+    // Skip a "you earned 0 points" notification for a visit that just
+    // confirms an appointment whose points were already awarded at payment
+    // time - that would read as a bug, not as news.
+    if (pointsEarned > 0) await insertNotification(
       clientId,
       "reward",
       "Points earned!",

@@ -233,7 +233,8 @@ export async function getSalonAppointments(
   const rows = await query(
     `SELECT a.id, u.name AS client_name, u.email AS client_email, a.service_id, sv.name AS service_name,
             a.price, a.appointment_date, a.appointment_time, a.status,
-            a.payment_method, a.payment_status, a.points_awarded
+            a.payment_method, a.payment_status, a.points_awarded,
+            EXISTS (SELECT 1 FROM visits v WHERE v.appointment_id = a.id) AS visit_logged
      FROM appointments a
      JOIN users u ON u.id = a.client_id
      JOIN salon_services sv ON sv.id = a.service_id
@@ -259,6 +260,7 @@ export async function getSalonAppointments(
         paymentMethod: r.payment_method,
         paymentStatus: r.payment_status,
         pointsAwarded: r.points_awarded,
+        visitLogged: r.visit_logged,
       }))
     ),
   };

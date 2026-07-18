@@ -183,12 +183,13 @@ export function logVisit(
   idToken: string,
   clientEmail: string,
   amountSpent: number,
-  serviceId?: string
+  serviceId?: string,
+  appointmentId?: string
 ): Promise<LogVisitResult> {
   return apiFetch<LogVisitResult>("/visits", {
     idToken,
     method: "POST",
-    body: { clientEmail, amountSpent, serviceId: serviceId ?? null },
+    body: { clientEmail, amountSpent, serviceId: serviceId ?? null, appointmentId: appointmentId ?? null },
   });
 }
 
@@ -435,6 +436,7 @@ export interface SalonAppointment {
   paymentMethod: PaymentMethod;
   paymentStatus: AppointmentPaymentStatus;
   pointsAwarded: number;
+  visitLogged: boolean;
 }
 
 export interface CreateAppointmentInput {
