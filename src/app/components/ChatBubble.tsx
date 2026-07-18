@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { MessageCircle, X, Send, Loader2 } from "lucide-react";
 import { sendMessageToLex } from "../lib/lexConfig";
 import { useAuth } from "../context/AuthContext";
-import { getMe, getMyReferrals, getSalons } from "../lib/apiClient";
+import { getMe, getMyReferrals, getSalons, getMyFavorites, getMyAppointments } from "../lib/apiClient";
 
 interface ChatMessage {
   id: string;
@@ -33,8 +33,14 @@ export function ChatBubble() {
   // lookup its fulfillment Lambda used to fall back to - see lexConfig.ts.
   useEffect(() => {
     if (!auth.idToken) return;
-    Promise.all([getMe(auth.idToken), getMyReferrals(auth.idToken), getSalons()])
-      .then(([me, referrals, salons]) => {
+    Promise.all([
+      getMe(auth.idToken),
+      getMyReferrals(auth.idToken),
+      getSalons(),
+      getMyFavorites(auth.idToken),
+      getMyAppointments(auth.idToken),
+    ])
+      .then(([me, referrals, salons, favoriteIds, appointments]) => {
         const pendingCount = referrals.referrals.filter((r) => r.status === "pending").length;
 
         // Points are per-salon in this app, never a single pooled number -
@@ -48,12 +54,27 @@ export function ChatBubble() {
           .map((p) => `${salonName(p.salonId)}: ${p.points} points`)
           .join(", ");
 
+        const favoriteSalons = favoriteIds.map(salonName).join(", ");
+
+        // Appointments are a real in-app feature (booking, Pay Now/Pay
+        // Later, status tracking) - the bot used to have no idea these
+        // existed and would wrongly tell users to "check with the salon
+        // directly". Soonest upcoming one only, to keep this a short string.
+        const upcoming = appointments
+          .filter((a) => a.status === "pending" || a.status === "confirmed")
+          .sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`))[0];
+        const nextAppointment = upcoming
+          ? `${upcoming.serviceName} at ${upcoming.salonName} on ${upcoming.date} at ${upcoming.time} (${upcoming.status}, ${upcoming.paymentMethod === "pay_now" ? "paid" : "pay at salon"})`
+          : "no upcoming appointments";
+
         setSessionAttributes({
           name: me.name,
           referral_code: me.referralCode ?? "not assigned yet",
           referrals: String(referrals.totalCompleted),
           pending_referrals: String(pendingCount),
           points_by_salon: pointsBySalon || "no points yet at any salon",
+          favorite_salons: favoriteSalons || "none yet",
+          next_appointment: nextAppointment,
         });
       })
       .catch(() => {
