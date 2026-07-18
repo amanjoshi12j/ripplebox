@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { MessageCircle, X, Send, Loader2 } from "lucide-react";
 import { sendMessageToLex } from "../lib/lexConfig";
+import { useAuth } from "../context/AuthContext";
+import { getMe, getMyReferrals } from "../lib/apiClient";
 
 interface ChatMessage {
   id: string;
@@ -12,6 +14,7 @@ interface ChatMessage {
 const sessionId = `session-${Math.random().toString(36).slice(2)}`;
 
 export function ChatBubble() {
+  const auth = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
     { id: "welcome", sender: "bot", text: "Hey! 👋 I'm your RippleBox assistant. Ask me anything about referrals, rewards, or your account!" },
@@ -19,11 +22,32 @@ export function ChatBubble() {
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [showQuickReplies, setShowQuickReplies] = useState(true);
+  const [sessionAttributes, setSessionAttributes] = useState<Record<string, string>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, isOpen]);
+
+  // Real data for the bot to personalize with, replacing an old dummy
+  // lookup its fulfillment Lambda used to fall back to - see lexConfig.ts.
+  useEffect(() => {
+    if (!auth.idToken) return;
+    Promise.all([getMe(auth.idToken), getMyReferrals(auth.idToken)])
+      .then(([me, referrals]) => {
+        const pendingCount = referrals.referrals.filter((r) => r.status === "pending").length;
+        setSessionAttributes({
+          name: me.name,
+          referral_code: me.referralCode ?? "not assigned yet",
+          referrals: String(referrals.totalCompleted),
+          pending_referrals: String(pendingCount),
+        });
+      })
+      .catch(() => {
+        // The bot still works without personalization if this fails - not
+        // worth blocking or erroring the whole widget over.
+      });
+  }, [auth.idToken]);
 
   const handleSend = async (overrideText?: string) => {
     const trimmed = (overrideText ?? input).trim();
@@ -36,7 +60,7 @@ export function ChatBubble() {
     setIsSending(true);
 
     try {
-      const reply = await sendMessageToLex(trimmed, sessionId);
+      const reply = await sendMessageToLex(trimmed, sessionId, sessionAttributes);
       setMessages((prev) => [...prev, { id: `${Date.now()}-bot`, sender: "bot", text: reply }]);
     } catch (err) {
       console.error("Chatbot error:", err);

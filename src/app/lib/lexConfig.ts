@@ -25,8 +25,16 @@ const lexClient = new LexRuntimeV2Client({
 /**
  * Sends a message to the RippleBox Lex bot and returns the bot's reply text.
  * Mirrors the working recognizeText() call from the standalone demo.
+ *
+ * sessionAttributes carries the real logged-in user's data (name, referral
+ * code, etc.) so the bot's fulfillment Lambda can personalize its answer
+ * without needing its own lookup - see ChatBubble.tsx for what gets passed.
  */
-export async function sendMessageToLex(message: string, sessionId: string): Promise<string> {
+export async function sendMessageToLex(
+  message: string,
+  sessionId: string,
+  sessionAttributes?: Record<string, string>
+): Promise<string> {
   try {
     const command = new RecognizeTextCommand({
       botId: BOT_ID,
@@ -34,6 +42,7 @@ export async function sendMessageToLex(message: string, sessionId: string): Prom
       localeId: LOCALE_ID,
       sessionId,
       text: message,
+      sessionState: sessionAttributes ? { sessionAttributes } : undefined,
     });
 
     const response = await lexClient.send(command);
