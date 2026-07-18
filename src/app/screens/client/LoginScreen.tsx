@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { Sparkles, User, Store, Loader2 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -9,6 +9,8 @@ import { useAuth } from "../../context/AuthContext";
 export function LoginScreen() {
   const navigate = useNavigate();
   const auth = useAuth();
+  const [searchParams] = useSearchParams();
+  const justReset = searchParams.get("reset") === "1";
   const [loginType, setLoginType] = useState<"user" | "salon" | null>(null);
   const [emailOrPhone, setEmailOrPhone] = useState("");
   const [password, setPassword] = useState("");
@@ -141,10 +143,17 @@ export function LoginScreen() {
 
           <button
             type="button"
+            onClick={() => navigate(`/forgot-password${emailOrPhone ? `?email=${encodeURIComponent(emailOrPhone)}` : ""}`)}
             className="text-sm text-[#e6d7f5] dark:text-purple-400 hover:underline"
           >
             Forgot password?
           </button>
+
+          {justReset && !error && (
+            <p className="text-sm text-green-600 dark:text-green-400">
+              Password reset! Sign in with your new password.
+            </p>
+          )}
 
           {error && (
             <p className="text-sm text-red-500 dark:text-red-400">{error}</p>

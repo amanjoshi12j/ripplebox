@@ -5,6 +5,8 @@ import {
   ResendConfirmationCodeCommand,
   InitiateAuthCommand,
   AuthFlowType,
+  ForgotPasswordCommand,
+  ConfirmForgotPasswordCommand,
 } from "@aws-sdk/client-cognito-identity-provider";
 
 // Same fallback pattern as lexConfig.ts: these values aren't secrets (a
@@ -73,6 +75,23 @@ export async function confirmSignUp(email: string, code: string): Promise<void> 
 
 export async function resendConfirmationCode(email: string): Promise<void> {
   await client.send(new ResendConfirmationCodeCommand({ ClientId: CLIENT_ID, Username: email }));
+}
+
+// Same "unauthenticated public action" category as SignUp/ConfirmSignUp
+// above - Cognito emails a reset code, no existing session needed.
+export async function forgotPassword(email: string): Promise<void> {
+  await client.send(new ForgotPasswordCommand({ ClientId: CLIENT_ID, Username: email }));
+}
+
+export async function confirmForgotPassword(email: string, code: string, newPassword: string): Promise<void> {
+  await client.send(
+    new ConfirmForgotPasswordCommand({
+      ClientId: CLIENT_ID,
+      Username: email,
+      ConfirmationCode: code,
+      Password: newPassword,
+    })
+  );
 }
 
 export interface AuthTokens {

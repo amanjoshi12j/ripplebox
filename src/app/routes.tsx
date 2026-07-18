@@ -8,6 +8,7 @@ import { SplashScreen } from "./screens/client/SplashScreen";
 import { OnboardingScreen } from "./screens/client/OnboardingScreen";
 import { LoginScreen } from "./screens/client/LoginScreen";
 import { SignupScreen } from "./screens/client/SignupScreen";
+import { ForgotPasswordScreen } from "./screens/client/ForgotPasswordScreen";
 import { ClientHome } from "./screens/client/ClientHome";
 import { ReferralScreen } from "./screens/client/ReferralScreen";
 import { RewardsScreen } from "./screens/client/RewardsScreen";
@@ -47,6 +48,10 @@ export const router = createBrowserRouter([
   {
     path: "/signup",
     element: <SignupScreen />,
+  },
+  {
+    path: "/forgot-password",
+    element: <ForgotPasswordScreen />,
   },
   {
     element: <RequireAuth role="client" />,
