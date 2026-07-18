@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { MessageCircle, X, Send, Loader2 } from "lucide-react";
 import { sendMessageToLex } from "../lib/lexConfig";
 import { useAuth } from "../context/AuthContext";
-import { getMe, getMyReferrals } from "../lib/apiClient";
+import { getMe, getMyReferrals, getSalons } from "../lib/apiClient";
 
 interface ChatMessage {
   id: string;
@@ -33,14 +33,27 @@ export function ChatBubble() {
   // lookup its fulfillment Lambda used to fall back to - see lexConfig.ts.
   useEffect(() => {
     if (!auth.idToken) return;
-    Promise.all([getMe(auth.idToken), getMyReferrals(auth.idToken)])
-      .then(([me, referrals]) => {
+    Promise.all([getMe(auth.idToken), getMyReferrals(auth.idToken), getSalons()])
+      .then(([me, referrals, salons]) => {
         const pendingCount = referrals.referrals.filter((r) => r.status === "pending").length;
+
+        // Points are per-salon in this app, never a single pooled number -
+        // same rule as everywhere else (ClientHome, redemption, etc.) - so
+        // the bot needs the real breakdown, not a single figure. Lex
+        // session attributes are flat strings, so this gets joined into one
+        // readable line rather than sent as structured data.
+        const salonName = (salonId: string) => salons.find((s) => s.id === salonId)?.name ?? "a salon";
+        const pointsBySalon = me.salonPoints
+          .filter((p) => p.points > 0)
+          .map((p) => `${salonName(p.salonId)}: ${p.points} points`)
+          .join(", ");
+
         setSessionAttributes({
           name: me.name,
           referral_code: me.referralCode ?? "not assigned yet",
           referrals: String(referrals.totalCompleted),
           pending_referrals: String(pendingCount),
+          points_by_salon: pointsBySalon || "no points yet at any salon",
         });
       })
       .catch(() => {
