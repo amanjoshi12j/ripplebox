@@ -4,7 +4,7 @@ import { Sparkles, User, Store, Check, CreditCard, Building2, Loader2, MailCheck
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
-import { signUp, confirmSignUp, resendConfirmationCode, login as cognitoLogin } from "../../lib/authConfig";
+import { signUp, confirmSignUp, resendConfirmationCode, loginExpectingSuccess } from "../../lib/authConfig";
 import { applyReferral, getSalons, type SalonSummary } from "../../lib/apiClient";
 import { useAuth } from "../../context/AuthContext";
 
@@ -147,7 +147,7 @@ export function SignupScreen() {
         // (no billing integration yet), sign-in happens after that.
         setStep("plan");
       } else {
-        const tokens = await cognitoLogin(email, password);
+        const tokens = await loginExpectingSuccess(email, password);
         auth.login(tokens);
 
         const referralSalonId = referredByLinkSalonId || manualReferralSalonId;

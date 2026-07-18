@@ -1,10 +1,15 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import { Sparkles, User, Store, Loader2 } from "lucide-react";
+import { Sparkles, User, Store, Loader2, ShieldCheck } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
-import { login as cognitoLogin } from "../../lib/authConfig";
+import { login as cognitoLogin, confirmMfaCode } from "../../lib/authConfig";
 import { useAuth } from "../../context/AuthContext";
+
+function roleFromIdToken(idToken: string): string {
+  const payload = JSON.parse(atob(idToken.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+  return payload["custom:role"];
+}
 
 export function LoginScreen() {
   const navigate = useNavigate();
@@ -16,6 +21,10 @@ export function LoginScreen() {
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Set only when Cognito challenges the login for a 2FA code instead of
+  // returning tokens directly - see login()'s LoginResult union.
+  const [mfaChallenge, setMfaChallenge] = useState<{ session: string; username: string } | null>(null);
+  const [mfaCode, setMfaCode] = useState("");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,14 +32,18 @@ export function LoginScreen() {
     setIsSubmitting(true);
 
     try {
-      const tokens = await cognitoLogin(emailOrPhone, password);
-      auth.login(tokens);
+      const result = await cognitoLogin(emailOrPhone, password);
+      if (result.status === "mfa_required") {
+        setMfaChallenge({ session: result.session, username: result.username });
+        return;
+      }
+
+      auth.login(result.tokens);
 
       // Navigate on the account's actual role, not just which tab they
       // clicked - a client account clicking "Salon Owner" shouldn't land
       // on the salon dashboard just because they clicked the wrong button.
-      const payload = JSON.parse(atob(tokens.idToken.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
-      navigate(payload["custom:role"] === "salon_owner" ? "/salon" : "/client");
+      navigate(roleFromIdToken(result.tokens.idToken) === "salon_owner" ? "/salon" : "/client");
     } catch (err) {
       const code = err instanceof Error ? err.name : "";
       if (code === "UserNotConfirmedException") {
@@ -46,6 +59,85 @@ export function LoginScreen() {
       setIsSubmitting(false);
     }
   };
+
+  const handleMfaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mfaChallenge) return;
+    setError(null);
+    setIsSubmitting(true);
+
+    try {
+      const tokens = await confirmMfaCode(mfaChallenge.username, mfaChallenge.session, mfaCode.trim());
+      auth.login(tokens);
+      navigate(roleFromIdToken(tokens.idToken) === "salon_owner" ? "/salon" : "/client");
+    } catch (err) {
+      const code = err instanceof Error ? err.name : "";
+      if (code === "CodeMismatchException") {
+        setError("That code is incorrect. Please check your authenticator app and try again.");
+      } else if (code === "ExpiredCodeException" || code === "NotAuthorizedException") {
+        setError("That code expired. Please sign in again.");
+        setMfaChallenge(null);
+      } else {
+        setError("Something went wrong verifying your code. Please try again.");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (mfaChallenge) {
+    return (
+      <div className="h-screen flex flex-col bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-800 max-w-md mx-auto">
+        <div className="flex-1 flex flex-col justify-center px-8">
+          <div className="text-center mb-8">
+            <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-[#e6d7f5] to-[#f5d7e3] dark:from-purple-500 dark:to-pink-500 flex items-center justify-center shadow-lg">
+              <ShieldCheck size={40} className="text-white" />
+            </div>
+            <h1 className="text-3xl mb-2 text-[#2d2d2d] dark:text-gray-100">Two-factor code</h1>
+            <p className="text-gray-500 dark:text-gray-400 text-sm">
+              Enter the 6-digit code from your authenticator app
+            </p>
+          </div>
+
+          <form onSubmit={handleMfaSubmit} className="space-y-4">
+            <Input
+              type="text"
+              inputMode="numeric"
+              placeholder="123456"
+              value={mfaCode}
+              onChange={(e) => setMfaCode(e.target.value)}
+              className="h-12 rounded-xl bg-[#f8f8f8] dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400 border-0 text-center tracking-widest"
+              required
+              autoFocus
+            />
+
+            {error && <p className="text-sm text-red-500 dark:text-red-400">{error}</p>}
+
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full h-14 bg-gradient-to-r from-[#e6d7f5] to-[#f5d7e3] dark:from-purple-500 dark:to-pink-500 text-[#2d2d2d] dark:text-white hover:opacity-90 transition-opacity rounded-2xl disabled:opacity-60 flex items-center justify-center gap-2"
+            >
+              {isSubmitting && <Loader2 size={18} className="animate-spin" />}
+              Verify & Sign In
+            </Button>
+          </form>
+
+          <Button
+            onClick={() => {
+              setMfaChallenge(null);
+              setMfaCode("");
+              setError(null);
+            }}
+            variant="ghost"
+            className="w-full mt-4 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+          >
+            Back to login
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (!loginType) {
     return (

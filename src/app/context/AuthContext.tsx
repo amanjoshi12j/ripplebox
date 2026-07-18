@@ -51,6 +51,7 @@ function loadStoredAuth(): StoredAuth | null {
 interface AuthContextType {
   isAuthenticated: boolean;
   idToken: string | null;
+  accessToken: string | null;
   userId: string | null;
   email: string | null;
   role: UserRole | null;
@@ -80,6 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         isAuthenticated: auth !== null,
         idToken: auth?.tokens.idToken ?? null,
+        accessToken: auth?.tokens.accessToken ?? null,
         userId: auth?.claims.sub ?? null,
         email: auth?.claims.email ?? null,
         role: auth?.claims.role ?? null,

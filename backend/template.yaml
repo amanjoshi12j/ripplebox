@@ -77,6 +77,14 @@ Resources:
       UserPoolName: ripplebox-users
       UsernameAttributes: [email]
       AutoVerifiedAttributes: [email]
+      # OPTIONAL (not ON) - most users won't set this up, and Cognito would
+      # otherwise force MFA on everyone. TOTP only (authenticator app), not
+      # SMS_MFA - avoids per-message SNS cost and the SNS sandbox limits on
+      # unverified phone numbers, matching the "cheapest/easiest" approach
+      # used throughout this backend.
+      MfaConfiguration: OPTIONAL
+      EnabledMfas:
+        - SOFTWARE_TOKEN_MFA
       AccountRecoverySetting:
         RecoveryMechanisms:
           - Name: verified_email

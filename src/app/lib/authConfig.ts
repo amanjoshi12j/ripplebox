@@ -4,9 +4,15 @@ import {
   ConfirmSignUpCommand,
   ResendConfirmationCodeCommand,
   InitiateAuthCommand,
+  RespondToAuthChallengeCommand,
   AuthFlowType,
+  ChallengeNameType,
   ForgotPasswordCommand,
   ConfirmForgotPasswordCommand,
+  AssociateSoftwareTokenCommand,
+  VerifySoftwareTokenCommand,
+  SetUserMFAPreferenceCommand,
+  GetUserCommand,
 } from "@aws-sdk/client-cognito-identity-provider";
 
 // Same fallback pattern as lexConfig.ts: these values aren't secrets (a
@@ -100,7 +106,21 @@ export interface AuthTokens {
   refreshToken: string;
 }
 
-export async function login(email: string, password: string): Promise<AuthTokens> {
+function tokensFromResult(authResult: { IdToken?: string; AccessToken?: string; RefreshToken?: string } | undefined): AuthTokens {
+  if (!authResult?.IdToken || !authResult.AccessToken || !authResult.RefreshToken) {
+    throw new Error("Login did not return the expected tokens");
+  }
+  return { idToken: authResult.IdToken, accessToken: authResult.AccessToken, refreshToken: authResult.RefreshToken };
+}
+
+// If the account has TOTP 2FA turned on, InitiateAuth doesn't return tokens
+// directly - it returns a challenge that must be answered (the 6-digit
+// code) via a second call before Cognito will issue tokens.
+export type LoginResult =
+  | { status: "success"; tokens: AuthTokens }
+  | { status: "mfa_required"; session: string; username: string };
+
+export async function login(email: string, password: string): Promise<LoginResult> {
   const result = await client.send(
     new InitiateAuthCommand({
       ClientId: CLIENT_ID,
@@ -109,14 +129,67 @@ export async function login(email: string, password: string): Promise<AuthTokens
     })
   );
 
-  const authResult = result.AuthenticationResult;
-  if (!authResult?.IdToken || !authResult.AccessToken || !authResult.RefreshToken) {
-    throw new Error("Login did not return the expected tokens");
+  if (result.ChallengeName === ChallengeNameType.SOFTWARE_TOKEN_MFA) {
+    if (!result.Session) throw new Error("Login did not return the expected MFA session");
+    return { status: "mfa_required", session: result.Session, username: email };
   }
 
-  return {
-    idToken: authResult.IdToken,
-    accessToken: authResult.AccessToken,
-    refreshToken: authResult.RefreshToken,
-  };
+  return { status: "success", tokens: tokensFromResult(result.AuthenticationResult) };
+}
+
+// A fresh signup can never already have 2FA enabled, so callers right after
+// signUp/confirmSignUp can use this instead of handling the MFA branch.
+export async function loginExpectingSuccess(email: string, password: string): Promise<AuthTokens> {
+  const result = await login(email, password);
+  if (result.status !== "success") {
+    throw new Error("Unexpected 2FA challenge right after signup");
+  }
+  return result.tokens;
+}
+
+export async function confirmMfaCode(username: string, session: string, code: string): Promise<AuthTokens> {
+  const result = await client.send(
+    new RespondToAuthChallengeCommand({
+      ClientId: CLIENT_ID,
+      ChallengeName: ChallengeNameType.SOFTWARE_TOKEN_MFA,
+      Session: session,
+      ChallengeResponses: { USERNAME: username, SOFTWARE_TOKEN_MFA_CODE: code },
+    })
+  );
+  return tokensFromResult(result.AuthenticationResult);
+}
+
+// --- Self-service 2FA enrollment (requires an existing signed-in session's
+// AccessToken, not the SigV4-less "unauthenticated action" pattern above) ---
+
+// Returns the shared secret (as a base32 string) used to build the
+// authenticator app's otpauth:// QR code - see TwoFactorAuthCard.tsx.
+export async function associateSoftwareToken(accessToken: string): Promise<string> {
+  const result = await client.send(new AssociateSoftwareTokenCommand({ AccessToken: accessToken }));
+  if (!result.SecretCode) throw new Error("Couldn't start 2FA setup. Please try again.");
+  return result.SecretCode;
+}
+
+// Proves the user actually scanned the QR code and their app is in sync
+// before we turn 2FA on - without this, a mistyped/unscanned secret would
+// lock the user out on their next login.
+export async function verifySoftwareToken(accessToken: string, code: string): Promise<void> {
+  const result = await client.send(new VerifySoftwareTokenCommand({ AccessToken: accessToken, UserCode: code }));
+  if (result.Status !== "SUCCESS") {
+    throw new Error("That code didn't match. Please check your authenticator app and try again.");
+  }
+}
+
+export async function setMfaEnabled(accessToken: string, enabled: boolean): Promise<void> {
+  await client.send(
+    new SetUserMFAPreferenceCommand({
+      AccessToken: accessToken,
+      SoftwareTokenMfaSettings: { Enabled: enabled, PreferredMfa: enabled },
+    })
+  );
+}
+
+export async function getMfaEnabled(accessToken: string): Promise<boolean> {
+  const result = await client.send(new GetUserCommand({ AccessToken: accessToken }));
+  return (result.UserMFASettingList ?? []).includes("SOFTWARE_TOKEN_MFA");
 }

@@ -1,9 +1,10 @@
 import { useNavigate } from "react-router";
-import { ArrowLeft, Moon, Sun, Bell, Lock, Globe, Palette, LogOut, Store, Scissors, CalendarCheck, ChevronRight } from "lucide-react";
+import { ArrowLeft, Moon, Sun, Bell, Globe, Palette, LogOut, Store, Scissors, CalendarCheck, ChevronRight } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
 import { Switch } from "../../components/ui/switch";
 import { Button } from "../../components/ui/button";
+import { TwoFactorAuthCard } from "../../components/TwoFactorAuthCard";
 
 export function SalonSettings() {
   const navigate = useNavigate();
@@ -162,20 +163,7 @@ export function SalonSettings() {
             Privacy & Security
           </h2>
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
-            <div className="p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#d4af37] to-[#f5e6c3] dark:from-amber-600 dark:to-yellow-600 flex items-center justify-center">
-                  <Lock size={20} className="text-white" />
-                </div>
-                <div>
-                  <p className="text-sm text-[#2d2d2d] dark:text-gray-100">Two-Factor Auth</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Protect your business account
-                  </p>
-                </div>
-              </div>
-              <Switch />
-            </div>
+            <TwoFactorAuthCard iconGradientClassName="from-[#d4af37] to-[#f5e6c3] dark:from-amber-600 dark:to-yellow-600" />
             <div className="p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#f5e6c3] to-[#d4af37]/30 dark:from-yellow-500 dark:to-amber-500 flex items-center justify-center">

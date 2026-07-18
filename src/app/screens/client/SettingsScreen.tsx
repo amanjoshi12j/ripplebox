@@ -1,7 +1,8 @@
 import { useNavigate } from "react-router";
-import { ArrowLeft, Moon, Sun, Bell, Lock, Globe, Palette } from "lucide-react";
+import { ArrowLeft, Moon, Sun, Bell, Globe, Palette } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
 import { Switch } from "../../components/ui/switch";
+import { TwoFactorAuthCard } from "../../components/TwoFactorAuthCard";
 
 export function SettingsScreen() {
   const navigate = useNavigate();
@@ -96,20 +97,7 @@ export function SettingsScreen() {
             Privacy & Security
           </h2>
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
-            <div className="p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#e6d7f5] to-[#f5f0fc] dark:from-purple-600 dark:to-indigo-600 flex items-center justify-center">
-                  <Lock size={20} className="text-white" />
-                </div>
-                <div>
-                  <p className="text-sm text-[#2d2d2d] dark:text-gray-100">Two-Factor Auth</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Extra security layer
-                  </p>
-                </div>
-              </div>
-              <Switch />
-            </div>
+            <TwoFactorAuthCard />
             <div className="p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#f5f0fc] to-[#f5e6c3]/30 dark:from-indigo-500 dark:to-blue-500 flex items-center justify-center">
