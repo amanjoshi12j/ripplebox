@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import confetti from "canvas-confetti";
 import { Gift, Crown, Zap, DollarSign, Calendar, Check, Lock, Loader2 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../../components/ui/tabs";
@@ -78,6 +79,12 @@ export function RewardsScreen() {
     try {
       const result = await redeemRewardRequest(auth.idToken, reward.id);
       toast.success(`Redeemed ${result.rewardTitle} at ${getSalonName(result.salonId)}!`);
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.7 },
+        colors: ["#e6d7f5", "#f5d7e3", "#d4af37"],
+      });
       setSalonPoints((prev) => ({ ...prev, [result.salonId]: result.pointsRemaining }));
       setRewardsBySalon((prev) => ({
         ...prev,

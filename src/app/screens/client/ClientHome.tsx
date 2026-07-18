@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router";
 import { useEffect, useState } from "react";
+import { motion } from "motion/react";
 import { Share2, Gift, TrendingUp, Sparkles, Heart, Loader2 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Progress } from "../../components/ui/progress";
@@ -14,6 +15,16 @@ import {
   type SalonSummary,
   type MeResponse,
 } from "../../lib/apiClient";
+
+const staggerContainer = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.08 } },
+};
+
+const staggerItem = {
+  hidden: { opacity: 0, y: 14 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: "easeOut" as const } },
+};
 
 export function ClientHome() {
   const navigate = useNavigate();
@@ -50,9 +61,12 @@ export function ClientHome() {
         <p className="text-gray-500 dark:text-gray-400 text-sm">Welcome back to your beauty hub</p>
       </div>
 
-      <div className="px-6 -mt-4">
+      <motion.div className="px-6 -mt-4" variants={staggerContainer} initial="hidden" animate="show">
         {/* Loyalty progress card */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 mb-6 border border-gray-100 dark:border-gray-700">
+        <motion.div
+          variants={staggerItem}
+          className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 mb-6 border border-gray-100 dark:border-gray-700"
+        >
           <div className="flex items-center justify-between mb-4">
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Your Loyalty Status</p>
@@ -75,10 +89,13 @@ export function ClientHome() {
             {Math.max(500 - lifetimePoints, 0)} lifetime points to unlock exclusive perks! Redeemable
             reward points are tracked separately per salon.
           </p>
-        </div>
+        </motion.div>
 
         {/* Per-salon points breakdown - these balances are NOT interchangeable */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 mb-6 border border-gray-100 dark:border-gray-700">
+        <motion.div
+          variants={staggerItem}
+          className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 mb-6 border border-gray-100 dark:border-gray-700"
+        >
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">Your Points by Salon</p>
           {(me?.salonPoints ?? []).filter((s) => s.points > 0).length === 0 ? (
             <p className="text-sm text-gray-400 dark:text-gray-500">
@@ -105,34 +122,42 @@ export function ClientHome() {
                 ))}
             </div>
           )}
-        </div>
+        </motion.div>
 
         {/* Quick actions */}
-        <div className="grid grid-cols-3 gap-3 mb-6">
-          <button
+        <motion.div variants={staggerItem} className="grid grid-cols-3 gap-3 mb-6">
+          <motion.button
+            whileTap={{ scale: 0.94 }}
             onClick={() => navigate("/client/referral")}
             className="bg-gradient-to-br from-[#e6d7f5] to-[#f5f0fc] dark:from-purple-500 dark:to-indigo-500 rounded-2xl p-4 text-center hover:shadow-md transition-shadow border border-transparent dark:border-gray-700"
           >
             <Share2 size={24} className="mx-auto mb-2 text-[#2d2d2d] dark:text-white" />
             <span className="text-xs text-[#2d2d2d] dark:text-white">Refer Friend</span>
-          </button>
+          </motion.button>
 
-          <button
+          <motion.button
+            whileTap={{ scale: 0.94 }}
             onClick={() => navigate("/client/rewards")}
             className="bg-gradient-to-br from-[#f5d7e3] to-[#fef3f7] dark:from-pink-500 dark:to-purple-500 rounded-2xl p-4 text-center hover:shadow-md transition-shadow border border-transparent dark:border-gray-700"
           >
             <Gift size={24} className="mx-auto mb-2 text-[#2d2d2d] dark:text-white" />
             <span className="text-xs text-[#2d2d2d] dark:text-white">My Rewards</span>
-          </button>
+          </motion.button>
 
-          <button className="bg-gradient-to-br from-[#f5e6c3] to-[#d4af37]/20 dark:from-amber-500 dark:to-yellow-500 rounded-2xl p-4 text-center hover:shadow-md transition-shadow border border-transparent dark:border-gray-700">
+          <motion.button
+            whileTap={{ scale: 0.94 }}
+            className="bg-gradient-to-br from-[#f5e6c3] to-[#d4af37]/20 dark:from-amber-500 dark:to-yellow-500 rounded-2xl p-4 text-center hover:shadow-md transition-shadow border border-transparent dark:border-gray-700"
+          >
             <TrendingUp size={24} className="mx-auto mb-2 text-[#2d2d2d] dark:text-white" />
             <span className="text-xs text-[#2d2d2d] dark:text-white">Activity</span>
-          </button>
-        </div>
+          </motion.button>
+        </motion.div>
 
         {/* Referral stats card */}
-        <div className="bg-gradient-to-r from-[#e6d7f5] to-[#f5d7e3] dark:from-purple-600 dark:to-pink-600 rounded-2xl p-6 mb-6">
+        <motion.div
+          variants={staggerItem}
+          className="bg-gradient-to-r from-[#e6d7f5] to-[#f5d7e3] dark:from-purple-600 dark:to-pink-600 rounded-2xl p-6 mb-6"
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-[#2d2d2d]/70 dark:text-white/70 mb-1">Friends Referred</p>
@@ -145,10 +170,10 @@ export function ClientHome() {
               Share Code
             </Button>
           </div>
-        </div>
+        </motion.div>
 
         {/* Featured salons */}
-        <div className="mb-6">
+        <motion.div variants={staggerItem} className="mb-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg text-[#2d2d2d] dark:text-gray-100">Featured Salons</h3>
             <button
@@ -170,8 +195,9 @@ export function ClientHome() {
           ) : (
             <div className="space-y-3">
               {featuredSalons.map((salon) => (
-                <div
+                <motion.div
                   key={salon.id}
+                  whileTap={{ scale: 0.98 }}
                   onClick={() => navigate(`/client/salons/${salon.id}`)}
                   className="flex items-center gap-4 bg-white dark:bg-gray-800 rounded-2xl p-3 shadow-md border border-gray-100 dark:border-gray-700 cursor-pointer hover:shadow-lg transition-shadow"
                 >
@@ -196,12 +222,12 @@ export function ClientHome() {
                         : "text-gray-300 dark:text-gray-600"
                     }
                   />
-                </div>
+                </motion.div>
               ))}
             </div>
           )}
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
     </div>
   );
 }
