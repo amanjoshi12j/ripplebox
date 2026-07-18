@@ -11,9 +11,17 @@ import {
   DialogTitle,
   DialogFooter,
 } from "../../components/ui/dialog";
+import { Label } from "../../components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { toast } from "sonner";
 import { useAuth } from "../../context/AuthContext";
-import { getSalonClients, logVisit, type SalonClient } from "../../lib/apiClient";
+import {
+  getSalonClients,
+  getSalonServicesManage,
+  logVisit,
+  type SalonClient,
+  type ManagedService,
+} from "../../lib/apiClient";
 
 type FilterType = "all" | "topSpenders" | "recent";
 
@@ -23,10 +31,12 @@ export function ClientManagement() {
   const [loadError, setLoadError] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFilter, setSelectedFilter] = useState<FilterType>("all");
+  const [services, setServices] = useState<ManagedService[]>([]);
 
   const [isLogVisitOpen, setIsLogVisitOpen] = useState(false);
   const [visitEmail, setVisitEmail] = useState("");
   const [visitAmount, setVisitAmount] = useState("");
+  const [visitServiceId, setVisitServiceId] = useState("");
   const [isSubmittingVisit, setIsSubmittingVisit] = useState(false);
   const [visitError, setVisitError] = useState<string | null>(null);
 
@@ -39,19 +49,45 @@ export function ClientManagement() {
     loadClients()?.catch(() => setLoadError(true));
   }, [auth.idToken]);
 
+  useEffect(() => {
+    if (!auth.idToken) return;
+    getSalonServicesManage(auth.idToken)
+      .then(setServices)
+      .catch(() => {
+        // Non-fatal - Log Visit just falls back to the dollar-only flow
+        // below if this salon has no services defined yet.
+      });
+  }, [auth.idToken]);
+
+  const handleServiceSelect = (serviceId: string) => {
+    setVisitServiceId(serviceId);
+    // Prefill the amount from the service's price as a convenience - still
+    // editable in case of a tip, discount, or add-on.
+    const service = services.find((s) => s.id === serviceId);
+    if (service && !visitAmount) {
+      setVisitAmount(String(parseFloat(service.price)));
+    }
+  };
+
   const handleLogVisit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!auth.idToken) return;
     setVisitError(null);
-    setIsSubmittingVisit(true);
 
+    if (services.length > 0 && !visitServiceId) {
+      setVisitError("Please choose which service this visit was for.");
+      return;
+    }
+
+    setIsSubmittingVisit(true);
     try {
       const amount = parseFloat(visitAmount);
-      const result = await logVisit(auth.idToken, visitEmail, amount);
+      const result = await logVisit(auth.idToken, visitEmail, amount, visitServiceId || undefined);
       toast.success(`Logged visit - awarded ${result.pointsEarned} points`);
       setIsLogVisitOpen(false);
       setVisitEmail("");
       setVisitAmount("");
+      setVisitServiceId("");
       await loadClients();
     } catch (err) {
       setVisitError(err instanceof Error ? err.message : "Something went wrong logging this visit.");
@@ -272,6 +308,23 @@ export function ClientManagement() {
                 required
               />
             </div>
+            {services.length > 0 && (
+              <div>
+                <Label className="block text-sm mb-2 text-gray-600 dark:text-gray-300">Service</Label>
+                <Select value={visitServiceId} onValueChange={handleServiceSelect}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Choose a service" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {services.map((service) => (
+                      <SelectItem key={service.id} value={service.id}>
+                        {service.name} - {service.pointsValue} pts
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div>
               <label className="block text-sm mb-2 text-gray-600 dark:text-gray-300">Amount Spent ($)</label>
               <Input

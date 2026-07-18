@@ -16,6 +16,7 @@ export interface SalonServiceSummary {
   id: string;
   name: string;
   price: string;
+  pointsValue: number;
 }
 
 export interface SalonSummary {
@@ -178,8 +179,17 @@ export interface LogVisitResult {
   newBalance: number;
 }
 
-export function logVisit(idToken: string, clientEmail: string, amountSpent: number): Promise<LogVisitResult> {
-  return apiFetch<LogVisitResult>("/visits", { idToken, method: "POST", body: { clientEmail, amountSpent } });
+export function logVisit(
+  idToken: string,
+  clientEmail: string,
+  amountSpent: number,
+  serviceId?: string
+): Promise<LogVisitResult> {
+  return apiFetch<LogVisitResult>("/visits", {
+    idToken,
+    method: "POST",
+    body: { clientEmail, amountSpent, serviceId: serviceId ?? null },
+  });
 }
 
 export interface ManagedReward {
@@ -228,11 +238,13 @@ export interface ManagedService {
   id: string;
   name: string;
   price: string;
+  pointsValue: number;
 }
 
 export interface ServiceInput {
   name: string;
   price: number;
+  pointsValue: number;
 }
 
 export function getSalonServicesManage(idToken: string): Promise<ManagedService[]> {
@@ -407,6 +419,7 @@ export interface MyAppointment {
   status: AppointmentStatus;
   paymentMethod: PaymentMethod;
   paymentStatus: AppointmentPaymentStatus;
+  pointsAwarded: number;
 }
 
 export interface SalonAppointment {
@@ -421,6 +434,7 @@ export interface SalonAppointment {
   status: AppointmentStatus;
   paymentMethod: PaymentMethod;
   paymentStatus: AppointmentPaymentStatus;
+  pointsAwarded: number;
 }
 
 export interface CreateAppointmentInput {

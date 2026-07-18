@@ -14,6 +14,7 @@ function getOwnerId(event: APIGatewayProxyEventV2WithJWTAuthorizer): string | un
 interface ServiceInput {
   name: string;
   price: number;
+  pointsValue: number;
 }
 
 function parseServiceInput(body: unknown): ServiceInput {
@@ -24,7 +25,10 @@ function parseServiceInput(body: unknown): ServiceInput {
   if (typeof b.price !== "number" || !Number.isFinite(b.price) || b.price < 0) {
     throw new HttpError(400, "price must be a non-negative number");
   }
-  return { name: b.name.trim(), price: b.price };
+  if (typeof b.pointsValue !== "number" || !Number.isInteger(b.pointsValue) || b.pointsValue < 0) {
+    throw new HttpError(400, "pointsValue must be a non-negative integer");
+  }
+  return { name: b.name.trim(), price: b.price, pointsValue: b.pointsValue };
 }
 
 export async function getSalonServicesManage(
@@ -36,7 +40,7 @@ export async function getSalonServicesManage(
   const salonId = await requireOwnedSalonId(ownerId);
 
   const services = await query(
-    `SELECT id, name, price FROM salon_services WHERE salon_id = :salonId::uuid ORDER BY created_at`,
+    `SELECT id, name, price, points_value FROM salon_services WHERE salon_id = :salonId::uuid ORDER BY created_at`,
     { salonId }
   );
 
@@ -44,7 +48,7 @@ export async function getSalonServicesManage(
     statusCode: 200,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(
-      services.map((s) => ({ id: s.id, name: s.name, price: s.price }))
+      services.map((s) => ({ id: s.id, name: s.name, price: s.price, pointsValue: s.points_value }))
     ),
   };
 }
@@ -66,9 +70,9 @@ export async function createSalonService(
   const salonId = await requireOwnedSalonId(ownerId);
 
   const rows = await query(
-    `INSERT INTO salon_services (salon_id, name, price)
-     VALUES (:salonId::uuid, :name, :price)
-     RETURNING id, name, price`,
+    `INSERT INTO salon_services (salon_id, name, price, points_value)
+     VALUES (:salonId::uuid, :name, :price, :pointsValue)
+     RETURNING id, name, price, points_value`,
     { salonId, ...input }
   );
   const s = rows[0];
@@ -76,7 +80,7 @@ export async function createSalonService(
   return {
     statusCode: 201,
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id: s.id, name: s.name, price: s.price }),
+    body: JSON.stringify({ id: s.id, name: s.name, price: s.price, pointsValue: s.points_value }),
   };
 }
 
@@ -103,7 +107,7 @@ export async function updateSalonService(
   // owner from editing a service that belongs to a different salon - same
   // data-scoping pattern used for rewards/campaigns.
   const updated = await execute(
-    `UPDATE salon_services SET name = :name, price = :price
+    `UPDATE salon_services SET name = :name, price = :price, points_value = :pointsValue
      WHERE id = :serviceId::uuid AND salon_id = :salonId::uuid`,
     { serviceId, salonId, ...input }
   );

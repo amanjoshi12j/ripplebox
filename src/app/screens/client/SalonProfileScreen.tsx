@@ -182,6 +182,9 @@ export function SalonProfileScreen() {
                     <h4 className="text-sm mb-1 text-[#2d2d2d] dark:text-gray-100">{service.name}</h4>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
                       ${parseFloat(service.price).toFixed(2)}
+                      {service.pointsValue > 0 && (
+                        <span className="text-[#d4af37] dark:text-amber-400"> · {service.pointsValue} pts</span>
+                      )}
                     </p>
                   </div>
                   <Button

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { ArrowLeft, Plus, Edit2, Trash2, Scissors, Loader2 } from "lucide-react";
+import { ArrowLeft, Plus, Edit2, Trash2, Scissors, Award, Loader2 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { Input } from "../../components/ui/input";
@@ -18,9 +18,10 @@ import {
 interface ServiceForm {
   name: string;
   price: string;
+  pointsValue: string;
 }
 
-const emptyForm: ServiceForm = { name: "", price: "" };
+const emptyForm: ServiceForm = { name: "", price: "", pointsValue: "" };
 
 export function ServicesManagement() {
   const navigate = useNavigate();
@@ -52,7 +53,11 @@ export function ServicesManagement() {
 
   const openEditDialog = (service: ManagedService) => {
     setEditingId(service.id);
-    setForm({ name: service.name, price: String(parseFloat(service.price)) });
+    setForm({
+      name: service.name,
+      price: String(parseFloat(service.price)),
+      pointsValue: String(service.pointsValue),
+    });
     setFormError(null);
     setIsDialogOpen(true);
   };
@@ -62,6 +67,7 @@ export function ServicesManagement() {
     setFormError(null);
 
     const price = parseFloat(form.price);
+    const pointsValue = parseInt(form.pointsValue, 10);
     if (!form.name.trim()) {
       setFormError("Service name is required.");
       return;
@@ -70,10 +76,14 @@ export function ServicesManagement() {
       setFormError("Price must be a non-negative number.");
       return;
     }
+    if (!Number.isInteger(pointsValue) || pointsValue < 0) {
+      setFormError("Points must be a non-negative whole number.");
+      return;
+    }
 
     setIsSaving(true);
     try {
-      const input = { name: form.name.trim(), price };
+      const input = { name: form.name.trim(), price, pointsValue };
 
       if (editingId) {
         await updateSalonService(auth.idToken, editingId, input);
@@ -116,7 +126,7 @@ export function ServicesManagement() {
           <h1 className="text-2xl text-[#2d2d2d] dark:text-gray-100">Services</h1>
         </div>
         <p className="text-gray-500 dark:text-gray-400 text-sm pl-14">
-          Manage the services you offer and their prices
+          Manage the services you offer, their prices, and points earned
         </p>
       </div>
 
@@ -158,9 +168,15 @@ export function ServicesManagement() {
 
                   <div className="flex-1 min-w-0">
                     <h4 className="text-sm mb-1 text-[#2d2d2d] dark:text-gray-100">{service.name}</h4>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      ${parseFloat(service.price).toFixed(2)}
-                    </p>
+                    <div className="flex items-center gap-3">
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        ${parseFloat(service.price).toFixed(2)}
+                      </p>
+                      <p className="text-sm text-[#d4af37] dark:text-amber-400 flex items-center gap-1">
+                        <Award size={14} />
+                        {service.pointsValue} pts
+                      </p>
+                    </div>
 
                     <div className="flex items-center gap-2 mt-3">
                       <Button
@@ -218,6 +234,21 @@ export function ServicesManagement() {
                 onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
                 className="mt-2 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
               />
+            </div>
+            <div>
+              <Label className="dark:text-gray-100">Points Earned</Label>
+              <Input
+                type="number"
+                min="0"
+                step="1"
+                placeholder="20"
+                value={form.pointsValue}
+                onChange={(e) => setForm((f) => ({ ...f, pointsValue: e.target.value }))}
+                className="mt-2 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
+              />
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                How many loyalty points a client earns for this service
+              </p>
             </div>
             {formError && <p className="text-sm text-red-500 dark:text-red-400">{formError}</p>}
             <Button

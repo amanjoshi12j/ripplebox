@@ -50,11 +50,12 @@ CREATE INDEX idx_salons_owner ON salons(owner_user_id);
 -- Which services a salon offers, with the price the salon charges for each
 -- (normalize further later if needed, e.g. duration, category)
 CREATE TABLE salon_services (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    salon_id    UUID NOT NULL REFERENCES salons(id) ON DELETE CASCADE,
-    name        TEXT NOT NULL,
-    price       NUMERIC(10,2) NOT NULL CHECK (price >= 0),
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    salon_id      UUID NOT NULL REFERENCES salons(id) ON DELETE CASCADE,
+    name          TEXT NOT NULL,
+    price         NUMERIC(10,2) NOT NULL CHECK (price >= 0),
+    points_value  INTEGER NOT NULL DEFAULT 0 CHECK (points_value >= 0),
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Client's favorited salons
@@ -80,7 +81,7 @@ CREATE TABLE salon_points_balance (
 
 -- Immutable audit log of every earn/spend event. This is the source of
 -- truth if the balance table ever needs to be rebuilt/reconciled.
-CREATE TYPE transaction_type AS ENUM ('earn_visit', 'earn_referral', 'redeem', 'adjustment', 'expiry');
+CREATE TYPE transaction_type AS ENUM ('earn_visit', 'earn_referral', 'earn_appointment', 'redeem', 'adjustment', 'expiry');
 
 CREATE TABLE point_transactions (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -230,11 +231,23 @@ CREATE TABLE appointments (
     payment_method               appointment_payment_method NOT NULL,
     payment_status               appointment_payment_status NOT NULL DEFAULT 'unpaid',
     stripe_payment_intent_id     TEXT,
+    -- Snapshotted like price - the service's points_value could change
+    -- later, but this records what was actually awarded (or would be
+    -- reversed) for this specific booking. Only ever non-zero for a
+    -- pay_now booking that successfully awarded points at payment time;
+    -- pay_later bookings earn points via a logged visit instead (see
+    -- visits.appointment_id below), not at booking time.
+    points_awarded               INTEGER NOT NULL DEFAULT 0,
     created_at                   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX idx_appointments_salon ON appointments(salon_id, appointment_date);
 CREATE INDEX idx_appointments_client ON appointments(client_id, appointment_date);
+
+-- Lets a logged visit point back to the specific pre-paid appointment it
+-- fulfills, so logVisit can tell points were already awarded at booking
+-- time (appointments.points_awarded) and skip awarding them again.
+ALTER TABLE visits ADD COLUMN appointment_id UUID REFERENCES appointments(id);
 
 -- ============================================================
 -- Notes:

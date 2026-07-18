@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { ArrowLeft, Loader2, Calendar, Clock, Banknote, CreditCard } from "lucide-react";
+import { ArrowLeft, Loader2, Calendar, Clock, Banknote, CreditCard, Award } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
 import { toast } from "sonner";
@@ -103,6 +103,11 @@ export function SalonAppointments() {
                     {a.paymentMethod === "pay_now" ? <CreditCard size={14} /> : <Banknote size={14} />}
                     {a.paymentMethod === "pay_now" ? `Paid $${parseFloat(a.price).toFixed(2)}` : `$${parseFloat(a.price).toFixed(2)} due`}
                   </span>
+                  {a.pointsAwarded > 0 && (
+                    <span className="flex items-center gap-1 text-[#d4af37] dark:text-amber-400">
+                      <Award size={14} /> {a.pointsAwarded} pts given
+                    </span>
+                  )}
                 </div>
 
                 {a.status === "pending" && (

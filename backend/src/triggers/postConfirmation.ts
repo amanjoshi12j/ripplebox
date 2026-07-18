@@ -31,11 +31,15 @@ export async function handler(
   // Cognito retries PostConfirmation on certain errors, so this must be
   // idempotent - ON CONFLICT DO NOTHING plus checking whether a row was
   // actually inserted (not just "did the statement succeed") is what stops
-  // a retry from also inserting a second salons row below.
+  // a retry from also inserting a second salons row below. Deliberately no
+  // conflict target specified (not "ON CONFLICT (id)") - Postgres only
+  // suppresses errors for the exact constraint named, and this table has
+  // two unique constraints (id, email) a concurrent retry could each hit;
+  // a bare ON CONFLICT DO NOTHING covers either.
   const inserted = await execute(
     `INSERT INTO users (id, email, name, phone, role, referral_code)
      VALUES (:id::uuid, :email, :name, :phone, :role::user_role, :referralCode)
-     ON CONFLICT (id) DO NOTHING`,
+     ON CONFLICT DO NOTHING`,
     { id: sub, email, name, phone, role, referralCode }
   );
 

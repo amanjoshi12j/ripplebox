@@ -299,6 +299,7 @@ export function BookingScreen() {
                     {salon.services.map((s) => (
                       <SelectItem key={s.id} value={s.id} className="dark:text-gray-100 dark:focus:bg-gray-700">
                         {s.name} - ${parseFloat(s.price).toFixed(2)}
+                        {s.pointsValue > 0 ? ` · ${s.pointsValue} pts` : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>

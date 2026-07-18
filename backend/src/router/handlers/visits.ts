@@ -5,6 +5,7 @@ import type {
 import { query, execute, runInTransaction } from "../../shared/db";
 import { HttpError } from "../../shared/httpError";
 import { insertNotification } from "../../shared/notifications";
+import { isUuid } from "../../shared/validation";
 
 // Flat bonus paid to both the referrer and the referred client, at the
 // referral's target salon, the first time the referred client visits there -
@@ -21,10 +22,12 @@ export async function logVisit(
 
   let clientEmail: unknown;
   let amountSpent: unknown;
+  let serviceId: unknown;
   try {
     const body = event.body ? JSON.parse(event.body) : {};
     clientEmail = body.clientEmail;
     amountSpent = body.amountSpent;
+    serviceId = body.serviceId;
   } catch {
     throw new HttpError(400, "Invalid request body");
   }
@@ -33,6 +36,9 @@ export async function logVisit(
   }
   if (typeof amountSpent !== "number" || amountSpent <= 0) {
     throw new HttpError(400, "amountSpent must be a positive number");
+  }
+  if (serviceId !== undefined && serviceId !== null && !isUuid(serviceId)) {
+    throw new HttpError(400, "serviceId must be a valid id");
   }
 
   // Scoping by "does this caller own a salon" is the authorization check
@@ -61,10 +67,27 @@ export async function logVisit(
   }
   const clientId = client.id as string;
 
-  // 1 point per dollar spent, scaled by the salon's own reward multiplier -
-  // ties visit earning to the same reward_multiplier already shown
-  // throughout the app (e.g. "2x Rewards" badges).
-  const pointsEarned = Math.round(amountSpent * rewardMultiplier);
+  // A picked service earns its own fixed points_value (set by the owner in
+  // Services Management) instead of the old flat dollar-based formula -
+  // lets different services be worth different amounts, e.g. a haircut vs a
+  // full color. Falls back to the dollar formula only if no service is
+  // picked, for backward compatibility with salons that haven't set any
+  // services up yet.
+  let pointsEarned: number;
+  if (serviceId) {
+    const serviceRows = await query(
+      `SELECT points_value FROM salon_services WHERE id = :serviceId::uuid AND salon_id = :salonId::uuid`,
+      { serviceId, salonId }
+    );
+    const service = serviceRows[0];
+    if (!service) throw new HttpError(404, "Service not found");
+    pointsEarned = Number(service.points_value);
+  } else {
+    // 1 point per dollar spent, scaled by the salon's own reward multiplier -
+    // ties visit earning to the same reward_multiplier already shown
+    // throughout the app (e.g. "2x Rewards" badges).
+    pointsEarned = Math.round(amountSpent * rewardMultiplier);
+  }
 
   const result = await runInTransaction(async (tx) => {
     // Lock any pending referral for (this client, this salon) before
@@ -96,7 +119,7 @@ export async function logVisit(
     if (referral) {
       await execute(
         `UPDATE referrals SET status = 'completed', points_awarded = :bonus, completed_at = now() WHERE id = :id::uuid`,
-        { id: referral.id, bonus: REFERRAL_BONUS },
+        { id: referral.id as string, bonus: REFERRAL_BONUS },
         tx
       );
     }
@@ -135,7 +158,7 @@ export async function logVisit(
       await execute(
         `INSERT INTO point_transactions (client_id, salon_id, type, points_delta, reference_id, note)
          VALUES (:clientId::uuid, :salonId::uuid, 'earn_referral', :bonus, :referralId::uuid, 'Referral bonus - you were referred here')`,
-        { clientId, salonId, bonus: REFERRAL_BONUS, referralId: referral.id },
+        { clientId, salonId, bonus: REFERRAL_BONUS, referralId: referral.id as string },
         tx
       );
 
@@ -151,7 +174,7 @@ export async function logVisit(
       await execute(
         `INSERT INTO point_transactions (client_id, salon_id, type, points_delta, reference_id, note)
          VALUES (:referrerId::uuid, :salonId::uuid, 'earn_referral', :bonus, :referralId::uuid, 'Referral bonus - your friend visited')`,
-        { referrerId, salonId, bonus: REFERRAL_BONUS, referralId: referral.id },
+        { referrerId, salonId, bonus: REFERRAL_BONUS, referralId: referral.id as string },
         tx
       );
 

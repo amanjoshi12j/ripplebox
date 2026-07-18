@@ -12,14 +12,22 @@ export async function getSalons(): Promise<APIGatewayProxyResultV2> {
        FROM salons
        ORDER BY name`
     ),
-    query(`SELECT id, salon_id, name, price FROM salon_services ORDER BY created_at`),
+    query(`SELECT id, salon_id, name, price, points_value FROM salon_services ORDER BY created_at`),
   ]);
 
-  const servicesBySalon = new Map<string, { id: string; name: string; price: string }[]>();
+  const servicesBySalon = new Map<
+    string,
+    { id: string; name: string; price: string; pointsValue: number }[]
+  >();
   for (const row of serviceRows) {
     const salonId = row.salon_id as string;
     const list = servicesBySalon.get(salonId) ?? [];
-    list.push({ id: row.id as string, name: row.name as string, price: row.price as string });
+    list.push({
+      id: row.id as string,
+      name: row.name as string,
+      price: row.price as string,
+      pointsValue: row.points_value as number,
+    });
     servicesBySalon.set(salonId, list);
   }
 

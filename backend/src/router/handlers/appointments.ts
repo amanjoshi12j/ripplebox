@@ -2,7 +2,7 @@ import type {
   APIGatewayProxyEventV2WithJWTAuthorizer,
   APIGatewayProxyResultV2,
 } from "aws-lambda";
-import { query, execute } from "../../shared/db";
+import { query, execute, runInTransaction } from "../../shared/db";
 import { HttpError } from "../../shared/httpError";
 import { requireOwnedSalonId } from "../../shared/salonAuth";
 import { getStripeClient } from "../../shared/stripe";
@@ -49,12 +49,13 @@ export async function createAppointment(
   }
 
   const serviceRows = await query(
-    `SELECT id, name, price FROM salon_services WHERE id = :serviceId::uuid AND salon_id = :salonId::uuid`,
+    `SELECT id, name, price, points_value FROM salon_services WHERE id = :serviceId::uuid AND salon_id = :salonId::uuid`,
     { serviceId, salonId }
   );
   const service = serviceRows[0];
   if (!service) throw new HttpError(404, "Service not found");
   const price = Number(service.price);
+  const servicePointsValue = Number(service.points_value);
 
   let paymentStatus = "unpaid";
   if (paymentMethod === "pay_now") {
@@ -89,27 +90,64 @@ export async function createAppointment(
     paymentStatus = "paid";
   }
 
-  const rows = await query(
-    `INSERT INTO appointments
-       (salon_id, client_id, service_id, price, appointment_date, appointment_time,
-        payment_method, payment_status, stripe_payment_intent_id)
-     VALUES
-       (:salonId::uuid, :clientId::uuid, :serviceId::uuid, :price, :date::date, :time,
-        :paymentMethod::appointment_payment_method, :paymentStatus::appointment_payment_status, :paymentIntentId)
-     RETURNING id, status, payment_status, appointment_date, appointment_time`,
-    {
-      salonId,
-      clientId,
-      serviceId,
-      price,
-      date,
-      time,
-      paymentMethod,
-      paymentStatus,
-      paymentIntentId: (paymentIntentId as string | undefined) ?? null,
+  // Paying up front earns points immediately (the client has already paid,
+  // unlike pay_later where points only come once the salon logs the actual
+  // visit - see logVisit). Awarding and the appointment insert happen in one
+  // transaction so a points bug can never create an appointment without its
+  // matching ledger entry, or vice versa - same discipline as visits.ts.
+  const pointsAwarded = paymentMethod === "pay_now" ? servicePointsValue : 0;
+
+  const appt = await runInTransaction(async (tx) => {
+    const rows = await query(
+      `INSERT INTO appointments
+         (salon_id, client_id, service_id, price, appointment_date, appointment_time,
+          payment_method, payment_status, stripe_payment_intent_id, points_awarded)
+       VALUES
+         (:salonId::uuid, :clientId::uuid, :serviceId::uuid, :price, :date::date, :time,
+          :paymentMethod::appointment_payment_method, :paymentStatus::appointment_payment_status,
+          :paymentIntentId, :pointsAwarded)
+       RETURNING id, status, payment_status, appointment_date, appointment_time`,
+      {
+        salonId,
+        clientId,
+        serviceId,
+        price,
+        date,
+        time,
+        paymentMethod,
+        paymentStatus,
+        paymentIntentId: (paymentIntentId as string | undefined) ?? null,
+        pointsAwarded,
+      },
+      tx
+    );
+    const inserted = rows[0];
+
+    if (pointsAwarded > 0) {
+      await execute(
+        `INSERT INTO salon_points_balance (client_id, salon_id, points)
+         VALUES (:clientId::uuid, :salonId::uuid, :pointsAwarded)
+         ON CONFLICT (client_id, salon_id)
+         DO UPDATE SET points = salon_points_balance.points + :pointsAwarded, updated_at = now()`,
+        { clientId, salonId, pointsAwarded },
+        tx
+      );
+      await execute(
+        `INSERT INTO point_transactions (client_id, salon_id, type, points_delta, reference_id, note)
+         VALUES (:clientId::uuid, :salonId::uuid, 'earn_appointment', :pointsAwarded, :appointmentId::uuid, :note)`,
+        {
+          clientId,
+          salonId,
+          pointsAwarded,
+          appointmentId: inserted.id as string,
+          note: `Paid booking: ${service.name}`,
+        },
+        tx
+      );
     }
-  );
-  const appt = rows[0];
+
+    return inserted;
+  });
 
   const salonRows = await query(`SELECT owner_user_id, name FROM salons WHERE id = :salonId::uuid`, { salonId });
   const salon = salonRows[0];
@@ -119,6 +157,14 @@ export async function createAppointment(
       "appointment",
       "New booking request",
       `A client requested ${service.name} on ${date} at ${time}.`
+    );
+  }
+  if (pointsAwarded > 0) {
+    await insertNotification(
+      clientId,
+      "reward",
+      "Points earned!",
+      `You earned ${pointsAwarded} points for booking ${service.name}${salon ? ` at ${salon.name}` : ""}.`
     );
   }
 
@@ -131,6 +177,7 @@ export async function createAppointment(
       paymentStatus: appt.payment_status,
       date: appt.appointment_date,
       time: appt.appointment_time,
+      pointsAwarded,
     }),
   };
 }
@@ -144,7 +191,7 @@ export async function getMyAppointments(
   const rows = await query(
     `SELECT a.id, a.salon_id, s.name AS salon_name, a.service_id, sv.name AS service_name,
             a.price, a.appointment_date, a.appointment_time, a.status,
-            a.payment_method, a.payment_status
+            a.payment_method, a.payment_status, a.points_awarded
      FROM appointments a
      JOIN salons s ON s.id = a.salon_id
      JOIN salon_services sv ON sv.id = a.service_id
@@ -169,6 +216,7 @@ export async function getMyAppointments(
         status: r.status,
         paymentMethod: r.payment_method,
         paymentStatus: r.payment_status,
+        pointsAwarded: r.points_awarded,
       }))
     ),
   };
@@ -185,7 +233,7 @@ export async function getSalonAppointments(
   const rows = await query(
     `SELECT a.id, u.name AS client_name, u.email AS client_email, a.service_id, sv.name AS service_name,
             a.price, a.appointment_date, a.appointment_time, a.status,
-            a.payment_method, a.payment_status
+            a.payment_method, a.payment_status, a.points_awarded
      FROM appointments a
      JOIN users u ON u.id = a.client_id
      JOIN salon_services sv ON sv.id = a.service_id
@@ -210,6 +258,7 @@ export async function getSalonAppointments(
         status: r.status,
         paymentMethod: r.payment_method,
         paymentStatus: r.payment_status,
+        pointsAwarded: r.points_awarded,
       }))
     ),
   };
@@ -219,6 +268,57 @@ const OWNER_TRANSITIONS: Record<string, string[]> = {
   pending: ["confirmed", "declined"],
   confirmed: ["cancelled"],
 };
+
+// Reverses whatever points a pay_now appointment awarded at booking time,
+// when that appointment ends up declined/cancelled instead of fulfilled.
+// Clamps to the client's current balance rather than assuming the full
+// amount is still there (they may have already spent some of it on a
+// redemption) - the ledger entry records what was actually taken back, not
+// what was originally awarded, so the audit trail stays honest.
+async function reverseAppointmentPoints(
+  tx: string,
+  clientId: string,
+  salonId: string,
+  appointmentId: string,
+  pointsAwarded: number,
+  serviceName: string,
+  reasonLabel: string
+): Promise<void> {
+  const balanceRows = await query(
+    `SELECT points FROM salon_points_balance WHERE client_id = :clientId::uuid AND salon_id = :salonId::uuid FOR UPDATE`,
+    { clientId, salonId },
+    tx
+  );
+  const currentPoints = (balanceRows[0]?.points as number) ?? 0;
+  const actualDeduction = Math.min(pointsAwarded, currentPoints);
+  if (actualDeduction <= 0) return;
+
+  await execute(
+    `UPDATE salon_points_balance SET points = points - :actualDeduction, updated_at = now()
+     WHERE client_id = :clientId::uuid AND salon_id = :salonId::uuid`,
+    { clientId, salonId, actualDeduction },
+    tx
+  );
+  await execute(
+    `INSERT INTO point_transactions (client_id, salon_id, type, points_delta, reference_id, note)
+     VALUES (:clientId::uuid, :salonId::uuid, 'adjustment', :delta, :appointmentId::uuid, :note)`,
+    {
+      clientId,
+      salonId,
+      delta: -actualDeduction,
+      appointmentId,
+      note: `Booking ${reasonLabel}: ${serviceName}`,
+    },
+    tx
+  );
+  await insertNotification(
+    clientId,
+    "alert",
+    "Points removed",
+    `${actualDeduction} points from your ${serviceName} booking were removed because it was ${reasonLabel}.`,
+    tx
+  );
+}
 
 export async function updateSalonAppointmentStatus(
   event: APIGatewayProxyEventV2WithJWTAuthorizer
@@ -241,7 +341,7 @@ export async function updateSalonAppointmentStatus(
   const salonId = await requireOwnedSalonId(ownerId);
 
   const rows = await query(
-    `SELECT a.status, a.client_id, a.appointment_date, a.appointment_time, sv.name AS service_name
+    `SELECT a.status, a.client_id, a.appointment_date, a.appointment_time, a.points_awarded, sv.name AS service_name
      FROM appointments a JOIN salon_services sv ON sv.id = a.service_id
      WHERE a.id = :appointmentId::uuid AND a.salon_id = :salonId::uuid`,
     { appointmentId, salonId }
@@ -254,11 +354,29 @@ export async function updateSalonAppointmentStatus(
     throw new HttpError(400, `Can't move an appointment from ${appt.status} to ${status}`);
   }
 
-  await execute(
-    `UPDATE appointments SET status = :status::appointment_status
-     WHERE id = :appointmentId::uuid AND salon_id = :salonId::uuid`,
-    { appointmentId, salonId, status }
-  );
+  const pointsAwarded = (appt.points_awarded as number) ?? 0;
+  const isEndingUnfulfilled = status === "declined" || status === "cancelled";
+
+  await runInTransaction(async (tx) => {
+    await execute(
+      `UPDATE appointments SET status = :status::appointment_status
+       WHERE id = :appointmentId::uuid AND salon_id = :salonId::uuid`,
+      { appointmentId, salonId, status },
+      tx
+    );
+
+    if (isEndingUnfulfilled && pointsAwarded > 0) {
+      await reverseAppointmentPoints(
+        tx,
+        appt.client_id as string,
+        salonId,
+        appointmentId as string,
+        pointsAwarded,
+        appt.service_name as string,
+        status as string
+      );
+    }
+  });
 
   const statusLabel = status === "confirmed" ? "confirmed" : status === "declined" ? "declined" : "cancelled";
   await insertNotification(
@@ -281,7 +399,7 @@ export async function cancelMyAppointment(
   if (!isUuid(appointmentId)) throw new HttpError(400, "Invalid appointmentId");
 
   const rows = await query(
-    `SELECT status, salon_id, appointment_date, appointment_time,
+    `SELECT status, salon_id, appointment_date, appointment_time, points_awarded,
             (SELECT name FROM salon_services WHERE id = appointments.service_id) AS service_name,
             (SELECT owner_user_id FROM salons WHERE id = appointments.salon_id) AS owner_id
      FROM appointments WHERE id = :appointmentId::uuid AND client_id = :clientId::uuid`,
@@ -297,10 +415,28 @@ export async function cancelMyAppointment(
     throw new HttpError(400, "Only a pending appointment can be cancelled this way");
   }
 
-  await execute(
-    `UPDATE appointments SET status = 'cancelled' WHERE id = :appointmentId::uuid AND client_id = :clientId::uuid`,
-    { appointmentId, clientId }
-  );
+  const salonId = appt.salon_id as string;
+  const pointsAwarded = (appt.points_awarded as number) ?? 0;
+
+  await runInTransaction(async (tx) => {
+    await execute(
+      `UPDATE appointments SET status = 'cancelled' WHERE id = :appointmentId::uuid AND client_id = :clientId::uuid`,
+      { appointmentId, clientId },
+      tx
+    );
+
+    if (pointsAwarded > 0) {
+      await reverseAppointmentPoints(
+        tx,
+        clientId,
+        salonId,
+        appointmentId as string,
+        pointsAwarded,
+        appt.service_name as string,
+        "cancelled"
+      );
+    }
+  });
 
   if (appt.owner_id) {
     await insertNotification(
