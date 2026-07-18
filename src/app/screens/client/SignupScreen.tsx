@@ -3,8 +3,9 @@ import { useNavigate, useSearchParams } from "react-router";
 import { Sparkles, User, Store, Check, CreditCard, Building2, Loader2, MailCheck } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { signUp, confirmSignUp, resendConfirmationCode, login as cognitoLogin } from "../../lib/authConfig";
-import { applyReferral } from "../../lib/apiClient";
+import { applyReferral, getSalons, type SalonSummary } from "../../lib/apiClient";
 import { useAuth } from "../../context/AuthContext";
 
 type SignupType = "user" | "salon" | null;
@@ -16,9 +17,11 @@ export function SignupScreen() {
   const auth = useAuth();
   const [searchParams] = useSearchParams();
   // A shared referral link (from ReferralScreen) encodes both the code and
-  // its target salon. A manually-typed code with no link has no salon
-  // context, so it just won't create a trackable referral - see visits.ts.
+  // its target salon. A manually-typed code has no salon context from a
+  // link, so the form asks for one directly - see the salon picker below.
   const referredByLinkSalonId = searchParams.get("salon");
+  const [salons, setSalons] = useState<SalonSummary[]>([]);
+  const [manualReferralSalonId, setManualReferralSalonId] = useState("");
   const [step, setStep] = useState<SignupStep>("type");
   const [signupType, setSignupType] = useState<SignupType>(null);
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan>(null);
@@ -42,6 +45,20 @@ export function SignupScreen() {
     const urlRef = searchParams.get("ref");
     if (urlRef) setReferralCode(urlRef);
   }, [searchParams]);
+
+  useEffect(() => {
+    // Only needed for the manual-entry salon picker below (a link-based
+    // referral already carries its salon in the URL) - fetch regardless of
+    // signup type since it's cheap and public, avoids a load delay if
+    // someone types a code right after picking "user".
+    getSalons()
+      .then(setSalons)
+      .catch(() => {
+        // Non-fatal - the manual salon picker just won't have options; the
+        // referral code field still works fine for someone who arrived via
+        // a link, which doesn't need this list at all.
+      });
+  }, []);
 
   const subscriptionPlans = [
     {
@@ -75,6 +92,21 @@ export function SignupScreen() {
   const handleInfoSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    // A typed-in code with no link needs a salon picked here, or applying it
+    // later would have nothing to attach the referral to (see applyReferral
+    // in the backend, which requires a salonId) - same "already-in-progress
+    // referral" this app has always required, just now impossible to skip.
+    if (
+      signupType === "user" &&
+      referralCode.trim() &&
+      !referredByLinkSalonId &&
+      !manualReferralSalonId
+    ) {
+      setError("Please choose which salon this referral code is for.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -118,11 +150,12 @@ export function SignupScreen() {
         const tokens = await cognitoLogin(email, password);
         auth.login(tokens);
 
-        if (referralCode.trim() && referredByLinkSalonId) {
+        const referralSalonId = referredByLinkSalonId || manualReferralSalonId;
+        if (referralCode.trim() && referralSalonId) {
           // Best-effort - a bad/stale referral shouldn't block the person
           // from getting into the app they just signed up for.
           try {
-            await applyReferral(tokens.idToken, referralCode.trim(), referredByLinkSalonId);
+            await applyReferral(tokens.idToken, referralCode.trim(), referralSalonId);
           } catch (referralErr) {
             console.error("Referral apply failed:", referralErr);
           }
@@ -336,6 +369,29 @@ export function SignupScreen() {
                   onChange={(e) => setReferralCode(e.target.value)}
                   className="h-12 rounded-xl bg-[#f8f8f8] dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400 border-0"
                 />
+
+                {/* Referral rewards are per-salon, so a code typed in here
+                    (rather than arriving via a shared link, which already
+                    carries this) needs the salon spelled out too. */}
+                {referralCode.trim() && !referredByLinkSalonId && (
+                  <div className="mt-3">
+                    <label className="block text-sm mb-2 text-gray-600 dark:text-gray-300">
+                      Which salon is this code for?
+                    </label>
+                    <Select value={manualReferralSalonId} onValueChange={setManualReferralSalonId}>
+                      <SelectTrigger className="h-12 rounded-xl bg-[#f8f8f8] dark:bg-gray-700 border-0 w-full">
+                        <SelectValue placeholder="Choose a salon" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {salons.map((salon) => (
+                          <SelectItem key={salon.id} value={salon.id}>
+                            {salon.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
             )}
 
