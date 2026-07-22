@@ -15,7 +15,7 @@ export async function getSalonRewards(
   }
 
   const rows = await query(
-    `SELECT id, salon_id, title, description, points_cost, category, expires_at
+    `SELECT id, salon_id, title, description, points_cost, category, discount_percent, expires_at
      FROM rewards
      WHERE salon_id = :salonId::uuid
        AND is_active = true
@@ -35,6 +35,7 @@ export async function getSalonRewards(
         description: r.description,
         pointsCost: r.points_cost,
         category: r.category,
+        discountPercent: r.discount_percent,
         expiresAt: r.expires_at,
       }))
     ),

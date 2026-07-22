@@ -11,9 +11,11 @@ import {
   getMe,
   getSalons,
   getSalonRewards,
+  getMyRedemptions,
   redeemReward as redeemRewardRequest,
   type SalonSummary,
   type RewardSummary,
+  type MyRedemption,
 } from "../../lib/apiClient";
 
 export function RewardsScreen() {
@@ -21,17 +23,18 @@ export function RewardsScreen() {
   const [salons, setSalons] = useState<SalonSummary[]>([]);
   const [salonPoints, setSalonPoints] = useState<Record<string, number>>({});
   const [rewardsBySalon, setRewardsBySalon] = useState<Record<string, RewardSummary[]>>({});
-  // Rewards redeemed this session - there's no GET /me/redemptions endpoint
-  // yet, so the "Redeemed" tab can only reflect what happened since the
-  // page loaded, not full history.
-  const [redeemedThisSession, setRedeemedThisSession] = useState<RewardSummary[]>([]);
+  const [redemptions, setRedemptions] = useState<MyRedemption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [redeemingId, setRedeemingId] = useState<string | null>(null);
 
   const loadData = async () => {
     if (!auth.idToken) return;
-    const [me, salonList] = await Promise.all([getMe(auth.idToken), getSalons()]);
+    const [me, salonList, myRedemptions] = await Promise.all([
+      getMe(auth.idToken),
+      getSalons(),
+      getMyRedemptions(auth.idToken),
+    ]);
 
     const pointsMap: Record<string, number> = {};
     me.salonPoints.forEach((p) => (pointsMap[p.salonId] = p.points));
@@ -43,6 +46,7 @@ export function RewardsScreen() {
     setSalons(salonList);
     setSalonPoints(pointsMap);
     setRewardsBySalon(rewardsMap);
+    setRedemptions(myRedemptions);
   };
 
   useEffect(() => {
@@ -90,7 +94,7 @@ export function RewardsScreen() {
         ...prev,
         [result.salonId]: (prev[result.salonId] ?? []).filter((r) => r.id !== reward.id),
       }));
-      setRedeemedThisSession((prev) => [...prev, reward]);
+      getMyRedemptions(auth.idToken).then(setRedemptions).catch(() => {});
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Something went wrong redeeming this reward.");
     } finally {
@@ -257,7 +261,7 @@ export function RewardsScreen() {
           </TabsContent>
 
           <TabsContent value="redeemed" className="space-y-6">
-            {redeemedThisSession.length === 0 ? (
+            {redemptions.length === 0 ? (
               <div className="text-center py-12">
                 <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
                   <Check size={40} className="text-gray-400" />
@@ -266,10 +270,10 @@ export function RewardsScreen() {
               </div>
             ) : (
               <div className="space-y-4">
-                {redeemedThisSession.map((reward, index) => (
+                {redemptions.map((redemption) => (
                   <div
-                    key={`${reward.id}-${index}`}
-                    className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 opacity-75"
+                    key={redemption.id}
+                    className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-5 border border-gray-200 dark:border-gray-700"
                   >
                     <div className="flex items-start gap-4">
                       <div className="w-12 h-12 rounded-xl bg-gray-200 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
@@ -277,13 +281,23 @@ export function RewardsScreen() {
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <h3 className="text-base mb-1 text-[#2d2d2d] dark:text-gray-100">{reward.title}</h3>
-                        {reward.description && (
-                          <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">{reward.description}</p>
+                        <h3 className="text-base mb-1 text-[#2d2d2d] dark:text-gray-100">{redemption.rewardTitle}</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                          {redemption.salonName} · {new Date(redemption.redeemedAt).toLocaleDateString()}
+                        </p>
+                        {redemption.usedAt ? (
+                          <Badge variant="secondary" className="bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+                            Used on {new Date(redemption.usedAt).toLocaleDateString()}
+                          </Badge>
+                        ) : redemption.discountPercent !== null ? (
+                          <Badge className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
+                            Available - apply at your next booking
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+                            Redeemed
+                          </Badge>
                         )}
-                        <Badge variant="secondary" className="bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
-                          Redeemed
-                        </Badge>
                       </div>
                     </div>
                   </div>

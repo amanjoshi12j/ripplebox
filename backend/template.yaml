@@ -276,6 +276,12 @@ Resources:
             ApiId: !Ref HttpApi
             Path: /rewards/redeem
             Method: post
+        GetMyRedemptions:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /me/redemptions
+            Method: get
         GetSalonMe:
           Type: HttpApi
           Properties:

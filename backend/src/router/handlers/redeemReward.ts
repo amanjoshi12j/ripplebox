@@ -32,7 +32,7 @@ export async function redeemReward(
     // enough on its own to rule out a deadlock against a concurrent
     // redemption.
     const rewardRows = await query(
-      `SELECT id, salon_id, title, points_cost, is_active, expires_at
+      `SELECT id, salon_id, title, points_cost, discount_percent, is_active, expires_at
        FROM rewards
        WHERE id = :rewardId::uuid
        FOR UPDATE`,
@@ -95,9 +95,9 @@ export async function redeemReward(
     );
 
     await execute(
-      `INSERT INTO redemptions (id, client_id, salon_id, reward_id, points_spent)
-       VALUES (:redemptionId::uuid, :clientId::uuid, :salonId::uuid, :rewardId::uuid, :pointsCost)`,
-      { redemptionId, clientId, salonId, rewardId, pointsCost },
+      `INSERT INTO redemptions (id, client_id, salon_id, reward_id, points_spent, discount_percent)
+       VALUES (:redemptionId::uuid, :clientId::uuid, :salonId::uuid, :rewardId::uuid, :pointsCost, :discountPercent)`,
+      { redemptionId, clientId, salonId, rewardId, pointsCost, discountPercent: (reward.discount_percent as number | null) ?? null },
       tx
     );
 
@@ -140,5 +140,49 @@ export async function redeemReward(
     statusCode: 200,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(result),
+  };
+}
+
+export async function getMyRedemptions(
+  event: APIGatewayProxyEventV2WithJWTAuthorizer
+): Promise<APIGatewayProxyResultV2> {
+  const clientId = event.requestContext.authorizer?.jwt?.claims?.sub as string | undefined;
+  if (!clientId) {
+    return { statusCode: 401, body: JSON.stringify({ error: "Unauthorized" }) };
+  }
+
+  const salonId = event.queryStringParameters?.salonId;
+  if (salonId && !isUuid(salonId)) {
+    throw new HttpError(400, "Invalid salonId");
+  }
+
+  const rows = await query(
+    `SELECT red.id, red.salon_id, s.name AS salon_name, red.reward_id, rew.title AS reward_title,
+            red.discount_percent, red.points_spent, red.redeemed_at, red.used_at, red.applied_appointment_id
+     FROM redemptions red
+     JOIN salons s ON s.id = red.salon_id
+     JOIN rewards rew ON rew.id = red.reward_id
+     WHERE red.client_id = :clientId::uuid ${salonId ? "AND red.salon_id = :salonId::uuid" : ""}
+     ORDER BY red.redeemed_at DESC`,
+    salonId ? { clientId, salonId } : { clientId }
+  );
+
+  return {
+    statusCode: 200,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(
+      rows.map((r) => ({
+        id: r.id,
+        salonId: r.salon_id,
+        salonName: r.salon_name,
+        rewardId: r.reward_id,
+        rewardTitle: r.reward_title,
+        discountPercent: r.discount_percent,
+        pointsSpent: r.points_spent,
+        redeemedAt: r.redeemed_at,
+        usedAt: r.used_at,
+        appliedAppointmentId: r.applied_appointment_id,
+      }))
+    ),
   };
 }

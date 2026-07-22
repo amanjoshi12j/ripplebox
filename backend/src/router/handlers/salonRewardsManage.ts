@@ -18,6 +18,7 @@ interface RewardInput {
   description: string | null;
   pointsCost: number;
   category: string | null;
+  discountPercent: number | null;
 }
 
 function parseRewardInput(body: unknown): RewardInput {
@@ -31,11 +32,27 @@ function parseRewardInput(body: unknown): RewardInput {
   if (b.category !== undefined && b.category !== null && !CATEGORIES.has(b.category as string)) {
     throw new HttpError(400, `category must be one of: ${[...CATEGORIES].join(", ")}`);
   }
+  let discountPercent: number | null = null;
+  if (b.category === "discount") {
+    // Required for discount rewards - without it, redeeming this reward
+    // would spend real points and do nothing at booking time (the bug this
+    // field exists to fix).
+    if (
+      typeof b.discountPercent !== "number" ||
+      !Number.isInteger(b.discountPercent) ||
+      b.discountPercent <= 0 ||
+      b.discountPercent > 100
+    ) {
+      throw new HttpError(400, "discountPercent is required for discount rewards and must be 1-100");
+    }
+    discountPercent = b.discountPercent;
+  }
   return {
     title: b.title,
     description: typeof b.description === "string" ? b.description : null,
     pointsCost: b.pointsCost,
     category: (b.category as string) ?? null,
+    discountPercent,
   };
 }
 
@@ -49,7 +66,7 @@ export async function getSalonRewardsManage(
 
   const [rewards, redeemedRows] = await Promise.all([
     query(
-      `SELECT id, title, description, points_cost, category, is_active, expires_at
+      `SELECT id, title, description, points_cost, category, discount_percent, is_active, expires_at
        FROM rewards WHERE salon_id = :salonId::uuid ORDER BY created_at DESC`,
       { salonId }
     ),
@@ -66,6 +83,7 @@ export async function getSalonRewardsManage(
         description: r.description,
         pointsCost: r.points_cost,
         category: r.category,
+        discountPercent: r.discount_percent,
         isActive: r.is_active,
         expiresAt: r.expires_at,
       })),
@@ -91,9 +109,9 @@ export async function createSalonReward(
   const salonId = await requireOwnedSalonId(ownerId);
 
   const rows = await query(
-    `INSERT INTO rewards (salon_id, title, description, points_cost, category, is_active)
-     VALUES (:salonId::uuid, :title, :description, :pointsCost, :category, true)
-     RETURNING id, title, description, points_cost, category, is_active, expires_at`,
+    `INSERT INTO rewards (salon_id, title, description, points_cost, category, discount_percent, is_active)
+     VALUES (:salonId::uuid, :title, :description, :pointsCost, :category, :discountPercent, true)
+     RETURNING id, title, description, points_cost, category, discount_percent, is_active, expires_at`,
     { salonId, ...input }
   );
   const r = rows[0];
@@ -107,6 +125,7 @@ export async function createSalonReward(
       description: r.description,
       pointsCost: r.points_cost,
       category: r.category,
+      discountPercent: r.discount_percent,
       isActive: r.is_active,
       expiresAt: r.expires_at,
     }),

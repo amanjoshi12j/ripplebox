@@ -23,9 +23,10 @@ interface RewardForm {
   description: string;
   pointsCost: string;
   category: string;
+  discountPercent: string;
 }
 
-const emptyForm: RewardForm = { title: "", description: "", pointsCost: "", category: "" };
+const emptyForm: RewardForm = { title: "", description: "", pointsCost: "", category: "", discountPercent: "" };
 
 export function RewardsManagement() {
   const auth = useAuth();
@@ -80,6 +81,7 @@ export function RewardsManagement() {
       description: reward.description ?? "",
       pointsCost: String(reward.pointsCost),
       category: reward.category ?? "",
+      discountPercent: reward.discountPercent !== null ? String(reward.discountPercent) : "",
     });
     setFormError(null);
     setIsDialogOpen(true);
@@ -98,6 +100,14 @@ export function RewardsManagement() {
       setFormError("Points required must be a positive number.");
       return;
     }
+    let discountPercent: number | null = null;
+    if (form.category === "discount") {
+      discountPercent = parseInt(form.discountPercent, 10);
+      if (!Number.isInteger(discountPercent) || discountPercent <= 0 || discountPercent > 100) {
+        setFormError("Discount % must be between 1 and 100.");
+        return;
+      }
+    }
 
     setIsSaving(true);
     try {
@@ -106,6 +116,7 @@ export function RewardsManagement() {
         description: form.description.trim() || null,
         pointsCost,
         category: form.category || null,
+        discountPercent,
       };
 
       if (editingId) {
@@ -133,6 +144,7 @@ export function RewardsManagement() {
         description: reward.description,
         pointsCost: reward.pointsCost,
         category: reward.category,
+        discountPercent: reward.discountPercent,
         isActive: !reward.isActive,
       });
       await loadRewards();
@@ -221,6 +233,14 @@ export function RewardsManagement() {
                           >
                             {reward.pointsCost} points
                           </Badge>
+                          {reward.discountPercent !== null && (
+                            <Badge
+                              variant="secondary"
+                              className="bg-[#e6d7f5]/30 dark:bg-gray-700 text-[#2d2d2d] dark:text-gray-100 text-xs"
+                            >
+                              {reward.discountPercent}% off
+                            </Badge>
+                          )}
                           <Badge
                             variant={reward.isActive ? "default" : "secondary"}
                             className={
@@ -316,6 +336,23 @@ export function RewardsManagement() {
                 </SelectContent>
               </Select>
             </div>
+            {form.category === "discount" && (
+              <div>
+                <Label className="dark:text-gray-100">Discount %</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  max="100"
+                  placeholder="20"
+                  value={form.discountPercent}
+                  onChange={(e) => setForm((f) => ({ ...f, discountPercent: e.target.value }))}
+                  className="mt-2 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
+                />
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                  Applied automatically when a client books using this redeemed reward
+                </p>
+              </div>
+            )}
             <div>
               <Label className="dark:text-gray-100">Points Required</Label>
               <Input

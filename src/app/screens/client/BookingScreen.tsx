@@ -14,8 +14,10 @@ import {
   getSalons,
   createAppointment,
   createPaymentIntent,
+  getMyRedemptions,
   type SalonSummary,
   type PaymentMethod,
+  type MyRedemption,
 } from "../../lib/apiClient";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -131,6 +133,8 @@ export function BookingScreen() {
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pay_later");
+  const [redemptions, setRedemptions] = useState<MyRedemption[]>([]);
+  const [redemptionId, setRedemptionId] = useState<string>("none");
 
   const [step, setStep] = useState<"form" | "payment" | "done">("form");
   const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -145,12 +149,34 @@ export function BookingScreen() {
       .catch(() => setLoadError(true));
   }, [salonId]);
 
+  useEffect(() => {
+    if (!salonId || !auth.idToken) return;
+    getMyRedemptions(auth.idToken, salonId)
+      .then((all) => setRedemptions(all.filter((r) => r.usedAt === null && r.discountPercent !== null)))
+      .catch(() => {
+        // Non-fatal - booking still works without the "apply a reward"
+        // picker, just without that option.
+      });
+  }, [salonId, auth.idToken]);
+
   const selectedService = salon?.services.find((s) => s.id === serviceId);
+  const selectedRedemption = redemptionId !== "none" ? redemptions.find((r) => r.id === redemptionId) : undefined;
+  // Client-side only, for showing a price preview - the real, enforced
+  // discount is always computed server-side (createPaymentIntent /
+  // createAppointment), never trusted from here.
+  const previewPrice =
+    selectedService && selectedRedemption
+      ? Math.round(parseFloat(selectedService.price) * (100 - selectedRedemption.discountPercent!)) / 100
+      : selectedService
+        ? parseFloat(selectedService.price)
+        : null;
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!auth.idToken || !salonId || !selectedService) return;
     setError(null);
+
+    const appliedRedemptionId = redemptionId !== "none" ? redemptionId : undefined;
 
     if (paymentMethod === "pay_later") {
       setIsSubmitting(true);
@@ -161,6 +187,7 @@ export function BookingScreen() {
           date,
           time,
           paymentMethod: "pay_later",
+          redemptionId: appliedRedemptionId,
         });
         setStep("done");
       } catch (err) {
@@ -174,7 +201,7 @@ export function BookingScreen() {
     // pay_now - create the PaymentIntent first, then show the card form
     setIsSubmitting(true);
     try {
-      const intent = await createPaymentIntent(auth.idToken, salonId, serviceId);
+      const intent = await createPaymentIntent(auth.idToken, salonId, serviceId, appliedRedemptionId);
       setClientSecret(intent.clientSecret);
       setAmount(intent.amount);
       setStep("payment");
@@ -196,6 +223,7 @@ export function BookingScreen() {
         time,
         paymentMethod: "pay_now",
         paymentIntentId,
+        redemptionId: redemptionId !== "none" ? redemptionId : undefined,
       });
       setStep("done");
     } catch (err) {
@@ -306,6 +334,43 @@ export function BookingScreen() {
                 </Select>
               )}
             </div>
+
+            {redemptions.length > 0 && (
+              <div>
+                <Label className="dark:text-gray-100 mb-2 block">Apply a redeemed reward</Label>
+                <Select value={redemptionId} onValueChange={setRedemptionId}>
+                  <SelectTrigger className="h-12 rounded-xl dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100">
+                    <SelectValue placeholder="None" />
+                  </SelectTrigger>
+                  <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
+                    <SelectItem value="none" className="dark:text-gray-100 dark:focus:bg-gray-700">
+                      Don't apply a reward
+                    </SelectItem>
+                    {redemptions.map((r) => (
+                      <SelectItem key={r.id} value={r.id} className="dark:text-gray-100 dark:focus:bg-gray-700">
+                        {r.rewardTitle} ({r.discountPercent}% off)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {selectedService && (
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700">
+                <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
+                  <span>Price</span>
+                  {selectedRedemption ? (
+                    <span>
+                      <span className="line-through mr-2">${parseFloat(selectedService.price).toFixed(2)}</span>
+                      <span className="text-[#2d2d2d] dark:text-gray-100">${previewPrice!.toFixed(2)}</span>
+                    </span>
+                  ) : (
+                    <span className="text-[#2d2d2d] dark:text-gray-100">${previewPrice!.toFixed(2)}</span>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div>
               <Label className="dark:text-gray-100 mb-2 block">Date</Label>

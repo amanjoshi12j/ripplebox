@@ -111,6 +111,11 @@ CREATE TABLE rewards (
     description     TEXT,
     points_cost     INTEGER NOT NULL CHECK (points_cost > 0),
     category        TEXT,                  -- discount / freebie / premium / credit
+    -- Only meaningful when category = 'discount' - what a redemption of this
+    -- reward actually knocks off a service's price at booking time. Without
+    -- this, "30% off" was just text in the title with nothing behind it -
+    -- redeeming spent real points but never affected a real price anywhere.
+    discount_percent INTEGER CHECK (discount_percent IS NULL OR (discount_percent > 0 AND discount_percent <= 100)),
     is_active       BOOLEAN NOT NULL DEFAULT true,
     expires_at      TIMESTAMPTZ,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -124,7 +129,19 @@ CREATE TABLE redemptions (
     salon_id        UUID NOT NULL REFERENCES salons(id) ON DELETE CASCADE,
     reward_id       UUID NOT NULL REFERENCES rewards(id),
     points_spent    INTEGER NOT NULL,
-    redeemed_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+    -- Snapshotted from rewards.discount_percent at redemption time - same
+    -- reasoning as points_spent above (a reward's discount could be edited
+    -- by the owner later; what the client actually redeemed must not
+    -- silently change). Null for non-discount rewards.
+    discount_percent INTEGER,
+    redeemed_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- A discount-type redemption starts unused and gets applied to exactly
+    -- one future appointment - see createAppointment. Not a coupon code:
+    -- the client picks it from their own redemption list at booking time,
+    -- so there's nothing to type in or lose. applied_appointment_id is
+    -- added further down (references appointments, defined later in this
+    -- file - same forward-reference reason visits.appointment_id is too).
+    used_at         TIMESTAMPTZ
 );
 
 CREATE INDEX idx_redemptions_client_salon ON redemptions(client_id, salon_id);
@@ -260,6 +277,11 @@ ALTER TABLE visits ADD COLUMN appointment_id UUID REFERENCES appointments(id);
 -- appointment at all), so this is a partial index instead, only enforcing
 -- uniqueness among the non-null values.
 CREATE UNIQUE INDEX idx_visits_appointment_id_unique ON visits(appointment_id) WHERE appointment_id IS NOT NULL;
+
+-- Same pattern as visits.appointment_id above, for the discount-redemption
+-- feature: which appointment a redeemed discount reward was applied to.
+ALTER TABLE redemptions ADD COLUMN applied_appointment_id UUID REFERENCES appointments(id);
+CREATE UNIQUE INDEX idx_redemptions_applied_appointment_unique ON redemptions(applied_appointment_id) WHERE applied_appointment_id IS NOT NULL;
 
 -- ============================================================
 -- Notes:

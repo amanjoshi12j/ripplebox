@@ -74,6 +74,7 @@ export interface RewardSummary {
   description: string | null;
   pointsCost: number;
   category: string | null;
+  discountPercent: number | null;
   expiresAt: string | null;
 }
 
@@ -92,6 +93,25 @@ export interface RedeemResult {
 
 export function redeemReward(idToken: string, rewardId: string): Promise<RedeemResult> {
   return apiFetch<RedeemResult>("/rewards/redeem", { idToken, method: "POST", body: { rewardId } });
+}
+
+export interface MyRedemption {
+  id: string;
+  salonId: string;
+  salonName: string;
+  rewardId: string;
+  rewardTitle: string;
+  discountPercent: number | null;
+  pointsSpent: number;
+  redeemedAt: string;
+  usedAt: string | null;
+  appliedAppointmentId: string | null;
+}
+
+// salonId filters to redemptions at one salon - used by BookingScreen to
+// offer only what's actually applicable to the salon being booked at.
+export function getMyRedemptions(idToken: string, salonId?: string): Promise<MyRedemption[]> {
+  return apiFetch<MyRedemption[]>(`/me/redemptions${salonId ? `?salonId=${salonId}` : ""}`, { idToken });
 }
 
 export interface SalonMeResponse {
@@ -207,6 +227,7 @@ export interface ManagedReward {
   description: string | null;
   pointsCost: number;
   category: string | null;
+  discountPercent: number | null;
   isActive: boolean;
   expiresAt: string | null;
 }
@@ -225,6 +246,7 @@ export interface RewardInput {
   description?: string | null;
   pointsCost: number;
   category?: string | null;
+  discountPercent?: number | null;
 }
 
 export function createSalonReward(idToken: string, input: RewardInput): Promise<ManagedReward> {
@@ -454,6 +476,7 @@ export interface CreateAppointmentInput {
   time: string;
   paymentMethod: PaymentMethod;
   paymentIntentId?: string;
+  redemptionId?: string;
 }
 
 export function createAppointment(
@@ -489,10 +512,15 @@ export interface PaymentIntentResult {
   amount: number;
 }
 
-export function createPaymentIntent(idToken: string, salonId: string, serviceId: string): Promise<PaymentIntentResult> {
+export function createPaymentIntent(
+  idToken: string,
+  salonId: string,
+  serviceId: string,
+  redemptionId?: string
+): Promise<PaymentIntentResult> {
   return apiFetch<PaymentIntentResult>("/payments/create-intent", {
     idToken,
     method: "POST",
-    body: { salonId, serviceId },
+    body: { salonId, serviceId, redemptionId: redemptionId ?? null },
   });
 }

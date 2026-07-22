@@ -8,6 +8,7 @@ import { requireOwnedSalonId } from "../../shared/salonAuth";
 import { getStripeClient } from "../../shared/stripe";
 import { isUuid } from "../../shared/validation";
 import { insertNotification } from "../../shared/notifications";
+import { resolveDiscount } from "../../shared/rewardDiscount";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
@@ -27,10 +28,10 @@ export async function createAppointment(
   const clientId = getCallerId(event);
   if (!clientId) return { statusCode: 401, body: JSON.stringify({ error: "Unauthorized" }) };
 
-  let salonId: unknown, serviceId: unknown, date: unknown, time: unknown, paymentMethod: unknown, paymentIntentId: unknown;
+  let salonId: unknown, serviceId: unknown, date: unknown, time: unknown, paymentMethod: unknown, paymentIntentId: unknown, redemptionId: unknown;
   try {
     const body = event.body ? JSON.parse(event.body) : {};
-    ({ salonId, serviceId, date, time, paymentMethod, paymentIntentId } = body);
+    ({ salonId, serviceId, date, time, paymentMethod, paymentIntentId, redemptionId } = body);
   } catch {
     throw new HttpError(400, "Invalid request body");
   }
@@ -47,6 +48,9 @@ export async function createAppointment(
   if (typeof paymentMethod !== "string" || !PAYMENT_METHODS.has(paymentMethod)) {
     throw new HttpError(400, "paymentMethod must be 'pay_now' or 'pay_later'");
   }
+  if (redemptionId !== undefined && redemptionId !== null && !isUuid(redemptionId)) {
+    throw new HttpError(400, "redemptionId must be a valid id");
+  }
 
   const serviceRows = await query(
     `SELECT id, name, price, points_value FROM salon_services WHERE id = :serviceId::uuid AND salon_id = :salonId::uuid`,
@@ -54,8 +58,16 @@ export async function createAppointment(
   );
   const service = serviceRows[0];
   if (!service) throw new HttpError(404, "Service not found");
-  const price = Number(service.price);
+  const originalPrice = Number(service.price);
   const servicePointsValue = Number(service.points_value);
+
+  // Preview only (no lock) - just to know the expected price for the
+  // pay_now Stripe-amount check below and the price snapshot either way.
+  // The transaction below re-checks this for real, with a row lock, right
+  // before actually marking the redemption used.
+  const price = redemptionId
+    ? (await resolveDiscount(clientId, salonId as string, redemptionId as string, originalPrice)).discountedPrice
+    : originalPrice;
 
   let paymentStatus = "unpaid";
   if (paymentMethod === "pay_now") {
@@ -80,7 +92,8 @@ export async function createAppointment(
     if (
       intent.metadata.salonId !== salonId ||
       intent.metadata.serviceId !== serviceId ||
-      intent.metadata.clientId !== clientId
+      intent.metadata.clientId !== clientId ||
+      (intent.metadata.redemptionId || "") !== ((redemptionId as string | undefined) ?? "")
     ) {
       throw new HttpError(400, "Payment does not match this booking");
     }
@@ -98,6 +111,17 @@ export async function createAppointment(
   const pointsAwarded = paymentMethod === "pay_now" ? servicePointsValue : 0;
 
   const appt = await runInTransaction(async (tx) => {
+    // The real, race-safe check - locks the redemption row and re-verifies
+    // it's still unused right before this transaction marks it used. If a
+    // concurrent request already consumed it, this throws and the whole
+    // transaction (including any pay_now insert below) rolls back - the
+    // rare cost is a successful Stripe charge with no appointment to show
+    // for it, which is an acceptable edge case here (no refund flow exists
+    // yet regardless, same limitation noted on cancelMyAppointment).
+    if (redemptionId) {
+      await resolveDiscount(clientId, salonId as string, redemptionId as string, originalPrice, tx, true);
+    }
+
     const rows = await query(
       `INSERT INTO appointments
          (salon_id, client_id, service_id, price, appointment_date, appointment_time,
@@ -122,6 +146,15 @@ export async function createAppointment(
       tx
     );
     const inserted = rows[0];
+
+    if (redemptionId) {
+      await execute(
+        `UPDATE redemptions SET used_at = now(), applied_appointment_id = :appointmentId::uuid
+         WHERE id = :redemptionId::uuid`,
+        { redemptionId, appointmentId: inserted.id as string },
+        tx
+      );
+    }
 
     if (pointsAwarded > 0) {
       await execute(

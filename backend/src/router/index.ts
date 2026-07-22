@@ -5,7 +5,7 @@ import type {
 import { getSalons } from "./handlers/salons";
 import { getMe, updateMe, updateMyAvatar } from "./handlers/me";
 import { getSalonRewards } from "./handlers/salonRewards";
-import { redeemReward } from "./handlers/redeemReward";
+import { redeemReward, getMyRedemptions } from "./handlers/redeemReward";
 import { getSalonMe, updateSalonMe, updateSalonLogo, updateSalonLocation } from "./handlers/salonMe";
 import { logVisit } from "./handlers/visits";
 import { getSalonClients } from "./handlers/salonClients";
@@ -55,6 +55,7 @@ const routes: Record<string, RouteHandler> = {
   "PATCH /me": updateMe,
   "GET /salons/{salonId}/rewards": getSalonRewards,
   "POST /rewards/redeem": redeemReward,
+  "GET /me/redemptions": getMyRedemptions,
   "GET /salon/me": getSalonMe,
   "PATCH /salon/me": updateSalonMe,
   "POST /visits": logVisit,
