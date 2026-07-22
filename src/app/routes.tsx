@@ -26,6 +26,7 @@ import { SalonDashboard } from "./screens/salon/SalonDashboard";
 import { ReferralAnalytics } from "./screens/salon/ReferralAnalytics";
 import { RewardsManagement } from "./screens/salon/RewardsManagement";
 import { ServicesManagement } from "./screens/salon/ServicesManagement";
+import { ProductsManagement } from "./screens/salon/ProductsManagement";
 import { SalonAppointments } from "./screens/salon/SalonAppointments";
 import { ClientManagement } from "./screens/salon/ClientManagement";
 import { CampaignCreation } from "./screens/salon/CampaignCreation";
@@ -86,6 +87,7 @@ export const router = createBrowserRouter([
           { path: "analytics", element: <ReferralAnalytics /> },
           { path: "rewards", element: <RewardsManagement /> },
           { path: "services", element: <ServicesManagement /> },
+          { path: "products", element: <ProductsManagement /> },
           { path: "appointments", element: <SalonAppointments /> },
           { path: "clients", element: <ClientManagement /> },
           { path: "campaigns", element: <CampaignCreation /> },

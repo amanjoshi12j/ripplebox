@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router";
-import { ArrowLeft, Moon, Sun, Bell, Globe, Palette, LogOut, Store, Scissors, CalendarCheck, ChevronRight } from "lucide-react";
+import { ArrowLeft, Moon, Sun, Bell, Globe, Palette, LogOut, Store, Scissors, Package, CalendarCheck, ChevronRight } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
 import { Switch } from "../../components/ui/switch";
@@ -69,6 +69,23 @@ export function SalonSettings() {
                 <p className="text-sm text-[#2d2d2d] dark:text-gray-100">Services</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
                   Manage services and pricing
+                </p>
+              </div>
+            </div>
+            <ChevronRight size={20} className="text-gray-400 dark:text-gray-500" />
+          </button>
+          <button
+            onClick={() => navigate("/salon/products")}
+            className="w-full flex items-center justify-between p-4 mt-3 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-shadow"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#f5e6c3] to-[#d4af37] dark:from-amber-500 dark:to-yellow-500 flex items-center justify-center">
+                <Package size={20} className="text-white" />
+              </div>
+              <div className="text-left">
+                <p className="text-sm text-[#2d2d2d] dark:text-gray-100">Products</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Manage retail products you sell
                 </p>
               </div>
             </div>

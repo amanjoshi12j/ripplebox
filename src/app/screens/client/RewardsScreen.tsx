@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import confetti from "canvas-confetti";
-import { Gift, Crown, Zap, DollarSign, Calendar, Check, Lock, Loader2 } from "lucide-react";
+import { Gift, Zap, DollarSign, Calendar, Check, Lock, Loader2 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../../components/ui/tabs";
 import { Badge } from "../../components/ui/badge";
@@ -68,8 +68,6 @@ export function RewardsScreen() {
         return <Zap size={20} className="text-[#e6d7f5]" />;
       case "freebie":
         return <Gift size={20} className="text-[#f5d7e3]" />;
-      case "premium":
-        return <Crown size={20} className="text-[#d4af37]" />;
       case "credit":
         return <DollarSign size={20} className="text-[#e6d7f5]" />;
       default:
@@ -208,6 +206,11 @@ export function RewardsScreen() {
                                 {reward.description && (
                                   <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">{reward.description}</p>
                                 )}
+                                {reward.freeProductName && (
+                                  <p className="text-sm text-[#2d2d2d] dark:text-gray-100 mb-2">
+                                    Gets you: <span className="font-medium">{reward.freeProductName}</span>
+                                  </p>
+                                )}
                                 <div className="flex flex-wrap items-center gap-2 mb-3">
                                   <Badge
                                     variant="secondary"
@@ -292,6 +295,10 @@ export function RewardsScreen() {
                         ) : redemption.discountPercent !== null ? (
                           <Badge className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
                             Available - apply at your next booking
+                          </Badge>
+                        ) : redemption.freeProductName ? (
+                          <Badge className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
+                            Free: {redemption.freeProductName} - show this to salon staff
                           </Badge>
                         ) : (
                           <Badge variant="secondary" className="bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-400">

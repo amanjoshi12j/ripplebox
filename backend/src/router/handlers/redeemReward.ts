@@ -32,10 +32,12 @@ export async function redeemReward(
     // enough on its own to rule out a deadlock against a concurrent
     // redemption.
     const rewardRows = await query(
-      `SELECT id, salon_id, title, points_cost, discount_percent, is_active, expires_at
-       FROM rewards
-       WHERE id = :rewardId::uuid
-       FOR UPDATE`,
+      `SELECT r.id, r.salon_id, r.title, r.points_cost, r.discount_percent, r.is_active, r.expires_at,
+              p.name AS free_product_name
+       FROM rewards r
+       LEFT JOIN salon_products p ON p.id = r.free_product_id
+       WHERE r.id = :rewardId::uuid
+       FOR UPDATE OF r`,
       { rewardId },
       tx
     );
@@ -95,9 +97,17 @@ export async function redeemReward(
     );
 
     await execute(
-      `INSERT INTO redemptions (id, client_id, salon_id, reward_id, points_spent, discount_percent)
-       VALUES (:redemptionId::uuid, :clientId::uuid, :salonId::uuid, :rewardId::uuid, :pointsCost, :discountPercent)`,
-      { redemptionId, clientId, salonId, rewardId, pointsCost, discountPercent: (reward.discount_percent as number | null) ?? null },
+      `INSERT INTO redemptions (id, client_id, salon_id, reward_id, points_spent, discount_percent, free_product_name)
+       VALUES (:redemptionId::uuid, :clientId::uuid, :salonId::uuid, :rewardId::uuid, :pointsCost, :discountPercent, :freeProductName)`,
+      {
+        redemptionId,
+        clientId,
+        salonId,
+        rewardId,
+        pointsCost,
+        discountPercent: (reward.discount_percent as number | null) ?? null,
+        freeProductName: (reward.free_product_name as string | null) ?? null,
+      },
       tx
     );
 
@@ -158,7 +168,8 @@ export async function getMyRedemptions(
 
   const rows = await query(
     `SELECT red.id, red.salon_id, s.name AS salon_name, red.reward_id, rew.title AS reward_title,
-            red.discount_percent, red.points_spent, red.redeemed_at, red.used_at, red.applied_appointment_id
+            red.discount_percent, red.free_product_name, red.points_spent, red.redeemed_at, red.used_at,
+            red.applied_appointment_id
      FROM redemptions red
      JOIN salons s ON s.id = red.salon_id
      JOIN rewards rew ON rew.id = red.reward_id
@@ -178,6 +189,7 @@ export async function getMyRedemptions(
         rewardId: r.reward_id,
         rewardTitle: r.reward_title,
         discountPercent: r.discount_percent,
+        freeProductName: r.free_product_name,
         pointsSpent: r.points_spent,
         redeemedAt: r.redeemed_at,
         usedAt: r.used_at,

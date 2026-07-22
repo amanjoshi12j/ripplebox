@@ -7,7 +7,15 @@ import { HttpError } from "../../shared/httpError";
 import { requireOwnedSalonId } from "../../shared/salonAuth";
 import { isUuid } from "../../shared/validation";
 
-const CATEGORIES = new Set(["discount", "freebie", "premium", "credit"]);
+async function validateOwnedProduct(salonId: string, productId: string): Promise<void> {
+  const rows = await query(
+    `SELECT id FROM salon_products WHERE id = :productId::uuid AND salon_id = :salonId::uuid`,
+    { productId, salonId }
+  );
+  if (!rows[0]) throw new HttpError(404, "Product not found");
+}
+
+const CATEGORIES = new Set(["discount", "freebie", "credit"]);
 
 function getOwnerId(event: APIGatewayProxyEventV2WithJWTAuthorizer): string | undefined {
   return event.requestContext.authorizer?.jwt?.claims?.sub as string | undefined;
@@ -19,6 +27,7 @@ interface RewardInput {
   pointsCost: number;
   category: string | null;
   discountPercent: number | null;
+  freeProductId: string | null;
 }
 
 function parseRewardInput(body: unknown): RewardInput {
@@ -47,12 +56,23 @@ function parseRewardInput(body: unknown): RewardInput {
     }
     discountPercent = b.discountPercent;
   }
+  let freeProductId: string | null = null;
+  if (b.category === "freebie") {
+    // Required for freebie rewards, same reasoning as discountPercent above -
+    // ownership (does this product actually belong to this salon) is
+    // checked separately, once the caller's salonId is known.
+    if (!isUuid(b.freeProductId)) {
+      throw new HttpError(400, "freeProductId is required for freebie rewards");
+    }
+    freeProductId = b.freeProductId as string;
+  }
   return {
     title: b.title,
     description: typeof b.description === "string" ? b.description : null,
     pointsCost: b.pointsCost,
     category: (b.category as string) ?? null,
     discountPercent,
+    freeProductId,
   };
 }
 
@@ -66,8 +86,11 @@ export async function getSalonRewardsManage(
 
   const [rewards, redeemedRows] = await Promise.all([
     query(
-      `SELECT id, title, description, points_cost, category, discount_percent, is_active, expires_at
-       FROM rewards WHERE salon_id = :salonId::uuid ORDER BY created_at DESC`,
+      `SELECT r.id, r.title, r.description, r.points_cost, r.category, r.discount_percent,
+              r.free_product_id, p.name AS free_product_name, r.is_active, r.expires_at
+       FROM rewards r
+       LEFT JOIN salon_products p ON p.id = r.free_product_id
+       WHERE r.salon_id = :salonId::uuid ORDER BY r.created_at DESC`,
       { salonId }
     ),
     query(`SELECT count(*) AS c FROM redemptions WHERE salon_id = :salonId::uuid`, { salonId }),
@@ -84,6 +107,8 @@ export async function getSalonRewardsManage(
         pointsCost: r.points_cost,
         category: r.category,
         discountPercent: r.discount_percent,
+        freeProductId: r.free_product_id,
+        freeProductName: r.free_product_name,
         isActive: r.is_active,
         expiresAt: r.expires_at,
       })),
@@ -107,11 +132,12 @@ export async function createSalonReward(
   }
 
   const salonId = await requireOwnedSalonId(ownerId);
+  if (input.freeProductId) await validateOwnedProduct(salonId, input.freeProductId);
 
   const rows = await query(
-    `INSERT INTO rewards (salon_id, title, description, points_cost, category, discount_percent, is_active)
-     VALUES (:salonId::uuid, :title, :description, :pointsCost, :category, :discountPercent, true)
-     RETURNING id, title, description, points_cost, category, discount_percent, is_active, expires_at`,
+    `INSERT INTO rewards (salon_id, title, description, points_cost, category, discount_percent, free_product_id, is_active)
+     VALUES (:salonId::uuid, :title, :description, :pointsCost, :category, :discountPercent, :freeProductId::uuid, true)
+     RETURNING id, title, description, points_cost, category, discount_percent, free_product_id, is_active, expires_at`,
     { salonId, ...input }
   );
   const r = rows[0];
@@ -126,6 +152,7 @@ export async function createSalonReward(
       pointsCost: r.points_cost,
       category: r.category,
       discountPercent: r.discount_percent,
+      freeProductId: r.free_product_id,
       isActive: r.is_active,
       expiresAt: r.expires_at,
     }),
@@ -154,6 +181,7 @@ export async function updateSalonReward(
   }
 
   const salonId = await requireOwnedSalonId(ownerId);
+  if (input.freeProductId) await validateOwnedProduct(salonId, input.freeProductId);
 
   // Scoping the UPDATE itself to salon_id (not just checking rewardId
   // exists) is what stops a salon owner editing a reward that belongs to
@@ -161,7 +189,8 @@ export async function updateSalonReward(
   const updated = await execute(
     `UPDATE rewards
      SET title = :title, description = :description, points_cost = :pointsCost,
-         category = :category, is_active = :isActive
+         category = :category, discount_percent = :discountPercent, free_product_id = :freeProductId::uuid,
+         is_active = :isActive
      WHERE id = :rewardId::uuid AND salon_id = :salonId::uuid`,
     { rewardId, salonId, isActive, ...input }
   );

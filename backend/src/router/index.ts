@@ -21,6 +21,12 @@ import {
   updateSalonService,
   deleteSalonService,
 } from "./handlers/salonServicesManage";
+import {
+  getSalonProductsManage,
+  createSalonProduct,
+  updateSalonProduct,
+  deleteSalonProduct,
+} from "./handlers/salonProductsManage";
 import { applyReferral, getMyReferrals } from "./handlers/referrals";
 import { getSalonCampaigns, createSalonCampaign, updateSalonCampaign } from "./handlers/campaigns";
 import { getNotifications, markNotificationRead, markAllNotificationsRead } from "./handlers/notifications";
@@ -68,6 +74,10 @@ const routes: Record<string, RouteHandler> = {
   "POST /salon/services": createSalonService,
   "PATCH /salon/services/{serviceId}": updateSalonService,
   "DELETE /salon/services/{serviceId}": deleteSalonService,
+  "GET /salon/products": getSalonProductsManage,
+  "POST /salon/products": createSalonProduct,
+  "PATCH /salon/products/{productId}": updateSalonProduct,
+  "DELETE /salon/products/{productId}": deleteSalonProduct,
   "POST /referrals/apply": applyReferral,
   "GET /me/referrals": getMyReferrals,
   "GET /salon/campaigns": getSalonCampaigns,

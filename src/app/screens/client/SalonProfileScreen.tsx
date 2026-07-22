@@ -194,6 +194,12 @@ export function SalonProfileScreen() {
               Services
             </TabsTrigger>
             <TabsTrigger
+              value="products"
+              className="flex-1 rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:shadow-sm dark:text-gray-400 dark:data-[state=active]:text-gray-100"
+            >
+              Products
+            </TabsTrigger>
+            <TabsTrigger
               value="offers"
               className="flex-1 rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:shadow-sm dark:text-gray-400 dark:data-[state=active]:text-gray-100"
             >
@@ -229,6 +235,31 @@ export function SalonProfileScreen() {
                   >
                     Book
                   </Button>
+                </div>
+              ))
+            )}
+          </TabsContent>
+
+          <TabsContent value="products" className="space-y-3">
+            {salon.products.length === 0 ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-6">
+                No products listed yet.
+              </p>
+            ) : (
+              salon.products.map((product) => (
+                <div
+                  key={product.id}
+                  className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-xl border border-transparent dark:border-gray-700"
+                >
+                  <div>
+                    <h4 className="text-sm mb-1 text-[#2d2d2d] dark:text-gray-100">{product.name}</h4>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      ${parseFloat(product.price).toFixed(2)}
+                    </p>
+                    {product.description && (
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{product.description}</p>
+                    )}
+                  </div>
                 </div>
               ))
             )}

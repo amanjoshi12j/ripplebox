@@ -19,6 +19,13 @@ export interface SalonServiceSummary {
   pointsValue: number;
 }
 
+export interface SalonProductSummary {
+  id: string;
+  name: string;
+  price: string;
+  description: string | null;
+}
+
 export interface SalonSummary {
   id: string;
   name: string;
@@ -31,6 +38,7 @@ export interface SalonSummary {
   rating: string | null;
   reviewCount: number;
   services: SalonServiceSummary[];
+  products: SalonProductSummary[];
 }
 
 async function apiFetch<T>(
@@ -75,6 +83,7 @@ export interface RewardSummary {
   pointsCost: number;
   category: string | null;
   discountPercent: number | null;
+  freeProductName: string | null;
   expiresAt: string | null;
 }
 
@@ -102,6 +111,7 @@ export interface MyRedemption {
   rewardId: string;
   rewardTitle: string;
   discountPercent: number | null;
+  freeProductName: string | null;
   pointsSpent: number;
   redeemedAt: string;
   usedAt: string | null;
@@ -228,6 +238,8 @@ export interface ManagedReward {
   pointsCost: number;
   category: string | null;
   discountPercent: number | null;
+  freeProductId: string | null;
+  freeProductName: string | null;
   isActive: boolean;
   expiresAt: string | null;
 }
@@ -247,6 +259,7 @@ export interface RewardInput {
   pointsCost: number;
   category?: string | null;
   discountPercent?: number | null;
+  freeProductId?: string | null;
 }
 
 export function createSalonReward(idToken: string, input: RewardInput): Promise<ManagedReward> {
@@ -296,6 +309,39 @@ export function updateSalonService(
 
 export function deleteSalonService(idToken: string, serviceId: string): Promise<{ deleted: boolean }> {
   return apiFetch<{ deleted: boolean }>(`/salon/services/${serviceId}`, { idToken, method: "DELETE" });
+}
+
+export interface ManagedProduct {
+  id: string;
+  name: string;
+  price: string;
+  description: string | null;
+}
+
+export interface ProductInput {
+  name: string;
+  price: number;
+  description?: string | null;
+}
+
+export function getSalonProductsManage(idToken: string): Promise<ManagedProduct[]> {
+  return apiFetch<ManagedProduct[]>("/salon/products", { idToken });
+}
+
+export function createSalonProduct(idToken: string, input: ProductInput): Promise<ManagedProduct> {
+  return apiFetch<ManagedProduct>("/salon/products", { idToken, method: "POST", body: input });
+}
+
+export function updateSalonProduct(
+  idToken: string,
+  productId: string,
+  input: ProductInput
+): Promise<ManagedProduct> {
+  return apiFetch<ManagedProduct>(`/salon/products/${productId}`, { idToken, method: "PATCH", body: input });
+}
+
+export function deleteSalonProduct(idToken: string, productId: string): Promise<{ deleted: boolean }> {
+  return apiFetch<{ deleted: boolean }>(`/salon/products/${productId}`, { idToken, method: "DELETE" });
 }
 
 export interface ApplyReferralResult {

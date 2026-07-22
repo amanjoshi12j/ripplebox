@@ -354,6 +354,30 @@ Resources:
             ApiId: !Ref HttpApi
             Path: /salon/services/{serviceId}
             Method: delete
+        GetSalonProductsManage:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /salon/products
+            Method: get
+        CreateSalonProduct:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /salon/products
+            Method: post
+        UpdateSalonProduct:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /salon/products/{productId}
+            Method: patch
+        DeleteSalonProduct:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /salon/products/{productId}
+            Method: delete
         ApplyReferral:
           Type: HttpApi
           Properties:

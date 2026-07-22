@@ -15,12 +15,14 @@ export async function getSalonRewards(
   }
 
   const rows = await query(
-    `SELECT id, salon_id, title, description, points_cost, category, discount_percent, expires_at
-     FROM rewards
-     WHERE salon_id = :salonId::uuid
-       AND is_active = true
-       AND (expires_at IS NULL OR expires_at > now())
-     ORDER BY points_cost`,
+    `SELECT r.id, r.salon_id, r.title, r.description, r.points_cost, r.category, r.discount_percent,
+            p.name AS free_product_name, r.expires_at
+     FROM rewards r
+     LEFT JOIN salon_products p ON p.id = r.free_product_id
+     WHERE r.salon_id = :salonId::uuid
+       AND r.is_active = true
+       AND (r.expires_at IS NULL OR r.expires_at > now())
+     ORDER BY r.points_cost`,
     { salonId }
   );
 
@@ -36,6 +38,7 @@ export async function getSalonRewards(
         pointsCost: r.points_cost,
         category: r.category,
         discountPercent: r.discount_percent,
+        freeProductName: r.free_product_name,
         expiresAt: r.expires_at,
       }))
     ),

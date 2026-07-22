@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Edit2, Trash2, Gift, Percent, DollarSign, Crown, Loader2 } from "lucide-react";
+import { Plus, Edit2, Trash2, Gift, Percent, DollarSign, Loader2 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
@@ -13,10 +13,12 @@ import {
   createSalonReward,
   updateSalonReward,
   deleteSalonReward,
+  getSalonProductsManage,
   type ManagedReward,
+  type ManagedProduct,
 } from "../../lib/apiClient";
 
-const CATEGORIES = ["discount", "credit", "freebie", "premium"] as const;
+const CATEGORIES = ["discount", "credit", "freebie"] as const;
 
 interface RewardForm {
   title: string;
@@ -24,13 +26,22 @@ interface RewardForm {
   pointsCost: string;
   category: string;
   discountPercent: string;
+  freeProductId: string;
 }
 
-const emptyForm: RewardForm = { title: "", description: "", pointsCost: "", category: "", discountPercent: "" };
+const emptyForm: RewardForm = {
+  title: "",
+  description: "",
+  pointsCost: "",
+  category: "",
+  discountPercent: "",
+  freeProductId: "",
+};
 
 export function RewardsManagement() {
   const auth = useAuth();
   const [rewards, setRewards] = useState<ManagedReward[] | null>(null);
+  const [products, setProducts] = useState<ManagedProduct[]>([]);
   const [totalRedeemed, setTotalRedeemed] = useState(0);
   const [loadError, setLoadError] = useState(false);
 
@@ -50,6 +61,14 @@ export function RewardsManagement() {
 
   useEffect(() => {
     loadRewards()?.catch(() => setLoadError(true));
+    if (auth.idToken) {
+      getSalonProductsManage(auth.idToken)
+        .then(setProducts)
+        .catch(() => {
+          // Non-fatal - the freebie product picker just won't have options;
+          // discount/credit rewards don't need this at all.
+        });
+    }
   }, [auth.idToken]);
 
   const getTypeIcon = (category: string | null) => {
@@ -60,8 +79,6 @@ export function RewardsManagement() {
         return <DollarSign size={20} className="text-[#d4af37] dark:text-amber-400" />;
       case "freebie":
         return <Gift size={20} className="text-[#f5d7e3] dark:text-amber-400" />;
-      case "premium":
-        return <Crown size={20} className="text-[#d4af37] dark:text-amber-400" />;
       default:
         return <Gift size={20} />;
     }
@@ -82,6 +99,7 @@ export function RewardsManagement() {
       pointsCost: String(reward.pointsCost),
       category: reward.category ?? "",
       discountPercent: reward.discountPercent !== null ? String(reward.discountPercent) : "",
+      freeProductId: reward.freeProductId ?? "",
     });
     setFormError(null);
     setIsDialogOpen(true);
@@ -108,6 +126,14 @@ export function RewardsManagement() {
         return;
       }
     }
+    let freeProductId: string | null = null;
+    if (form.category === "freebie") {
+      if (!form.freeProductId) {
+        setFormError("Please choose which product this reward gives away.");
+        return;
+      }
+      freeProductId = form.freeProductId;
+    }
 
     setIsSaving(true);
     try {
@@ -117,6 +143,7 @@ export function RewardsManagement() {
         pointsCost,
         category: form.category || null,
         discountPercent,
+        freeProductId,
       };
 
       if (editingId) {
@@ -145,6 +172,7 @@ export function RewardsManagement() {
         pointsCost: reward.pointsCost,
         category: reward.category,
         discountPercent: reward.discountPercent,
+        freeProductId: reward.freeProductId,
         isActive: !reward.isActive,
       });
       await loadRewards();
@@ -239,6 +267,14 @@ export function RewardsManagement() {
                               className="bg-[#e6d7f5]/30 dark:bg-gray-700 text-[#2d2d2d] dark:text-gray-100 text-xs"
                             >
                               {reward.discountPercent}% off
+                            </Badge>
+                          )}
+                          {reward.freeProductName && (
+                            <Badge
+                              variant="secondary"
+                              className="bg-[#f5d7e3]/30 dark:bg-gray-700 text-[#2d2d2d] dark:text-gray-100 text-xs"
+                            >
+                              Free: {reward.freeProductName}
                             </Badge>
                           )}
                           <Badge
@@ -351,6 +387,37 @@ export function RewardsManagement() {
                 <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                   Applied automatically when a client books using this redeemed reward
                 </p>
+              </div>
+            )}
+            {form.category === "freebie" && (
+              <div>
+                <Label className="dark:text-gray-100">Product</Label>
+                {products.length === 0 ? (
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+                    Add a product first (Settings → Products) before creating a freebie reward.
+                  </p>
+                ) : (
+                  <>
+                    <Select
+                      value={form.freeProductId}
+                      onValueChange={(v) => setForm((f) => ({ ...f, freeProductId: v }))}
+                    >
+                      <SelectTrigger className="mt-2 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100">
+                        <SelectValue placeholder="Choose a product" />
+                      </SelectTrigger>
+                      <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
+                        {products.map((p) => (
+                          <SelectItem key={p.id} value={p.id} className="dark:text-gray-100 dark:focus:bg-gray-700">
+                            {p.name} (${parseFloat(p.price).toFixed(2)})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                      Which product a client gets for redeeming this reward
+                    </p>
+                  </>
+                )}
               </div>
             )}
             <div>

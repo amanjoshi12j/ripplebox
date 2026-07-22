@@ -64,6 +64,23 @@ CREATE TABLE salon_services (
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Retail products a salon sells (shampoo, styling products, etc.) - distinct
+-- from salon_services, which are bookable appointments. Purely a catalog for
+-- now: no purchase/checkout flow, no points-on-purchase. Also what a
+-- 'freebie' reward points at (see rewards.free_product_id below) - lets a
+-- freebie reward name a specific real product instead of just being a
+-- decorative label with nothing behind it, same fix as discount_percent.
+CREATE TABLE salon_products (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    salon_id      UUID NOT NULL REFERENCES salons(id) ON DELETE CASCADE,
+    name          TEXT NOT NULL,
+    price         NUMERIC(10,2) NOT NULL CHECK (price >= 0),
+    description   TEXT,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_salon_products_salon ON salon_products(salon_id);
+
 -- Client's favorited salons
 CREATE TABLE favorite_salons (
     client_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -110,12 +127,17 @@ CREATE TABLE rewards (
     title           TEXT NOT NULL,
     description     TEXT,
     points_cost     INTEGER NOT NULL CHECK (points_cost > 0),
-    category        TEXT,                  -- discount / freebie / premium / credit
+    category        TEXT,                  -- discount / freebie / credit
     -- Only meaningful when category = 'discount' - what a redemption of this
     -- reward actually knocks off a service's price at booking time. Without
     -- this, "30% off" was just text in the title with nothing behind it -
     -- redeeming spent real points but never affected a real price anywhere.
     discount_percent INTEGER CHECK (discount_percent IS NULL OR (discount_percent > 0 AND discount_percent <= 100)),
+    -- Only meaningful when category = 'freebie' - which real product from
+    -- this salon's own catalog this reward hands over. Same reasoning as
+    -- discount_percent: a "freebie" with no product attached would just be
+    -- decorative text again.
+    free_product_id UUID REFERENCES salon_products(id),
     is_active       BOOLEAN NOT NULL DEFAULT true,
     expires_at      TIMESTAMPTZ,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -134,6 +156,11 @@ CREATE TABLE redemptions (
     -- by the owner later; what the client actually redeemed must not
     -- silently change). Null for non-discount rewards.
     discount_percent INTEGER,
+    -- Snapshotted from the reward's product name at redemption time, same
+    -- reasoning as discount_percent above. Not a product_id FK - the salon
+    -- could rename or delete the product later, but what the client was
+    -- promised at redemption time must stay exactly as shown.
+    free_product_name TEXT,
     redeemed_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
     -- A discount-type redemption starts unused and gets applied to exactly
     -- one future appointment - see createAppointment. Not a coupon code:
