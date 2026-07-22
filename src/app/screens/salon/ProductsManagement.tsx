@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { ArrowLeft, Plus, Edit2, Trash2, Package, Loader2 } from "lucide-react";
+import { ArrowLeft, Plus, Edit2, Trash2, Package, Camera, Loader2 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
+import { ImageWithFallback } from "../../components/figma/ImageWithFallback";
 import { toast } from "sonner";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -12,6 +13,7 @@ import {
   createSalonProduct,
   updateSalonProduct,
   deleteSalonProduct,
+  uploadImage,
   type ManagedProduct,
 } from "../../lib/apiClient";
 
@@ -19,9 +21,10 @@ interface ProductForm {
   name: string;
   price: string;
   description: string;
+  imageUrl: string | null;
 }
 
-const emptyForm: ProductForm = { name: "", price: "", description: "" };
+const emptyForm: ProductForm = { name: "", price: "", description: "", imageUrl: null };
 
 export function ProductsManagement() {
   const navigate = useNavigate();
@@ -34,6 +37,8 @@ export function ProductsManagement() {
   const [form, setForm] = useState<ProductForm>(emptyForm);
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadProducts = () => {
     if (!auth.idToken) return;
@@ -57,9 +62,26 @@ export function ProductsManagement() {
       name: product.name,
       price: String(parseFloat(product.price)),
       description: product.description ?? "",
+      imageUrl: product.imageUrl,
     });
     setFormError(null);
     setIsDialogOpen(true);
+  };
+
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !auth.idToken) return;
+
+    setIsUploadingImage(true);
+    try {
+      const publicUrl = await uploadImage(auth.idToken, "salon-product", file);
+      setForm((f) => ({ ...f, imageUrl: publicUrl }));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't upload this image.");
+    } finally {
+      setIsUploadingImage(false);
+    }
   };
 
   const handleSave = async () => {
@@ -78,7 +100,12 @@ export function ProductsManagement() {
 
     setIsSaving(true);
     try {
-      const input = { name: form.name.trim(), price, description: form.description.trim() || null };
+      const input = {
+        name: form.name.trim(),
+        price,
+        description: form.description.trim() || null,
+        imageUrl: form.imageUrl,
+      };
 
       if (editingId) {
         await updateSalonProduct(auth.idToken, editingId, input);
@@ -157,9 +184,17 @@ export function ProductsManagement() {
                 className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-100 dark:border-gray-700 shadow-sm"
               >
                 <div className="flex items-start gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#fef3f7] to-[#f5f0fc] dark:from-gray-700 dark:to-gray-600 flex items-center justify-center flex-shrink-0">
-                    <Package size={20} className="text-[#e6d7f5] dark:text-amber-400" />
-                  </div>
+                  {product.imageUrl ? (
+                    <ImageWithFallback
+                      src={product.imageUrl}
+                      alt={product.name}
+                      className="w-12 h-12 rounded-xl object-cover flex-shrink-0"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#fef3f7] to-[#f5f0fc] dark:from-gray-700 dark:to-gray-600 flex items-center justify-center flex-shrink-0">
+                      <Package size={20} className="text-[#e6d7f5] dark:text-amber-400" />
+                    </div>
+                  )}
 
                   <div className="flex-1 min-w-0">
                     <h4 className="text-sm mb-1 text-[#2d2d2d] dark:text-gray-100">{product.name}</h4>
@@ -206,6 +241,40 @@ export function ProductsManagement() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            <div className="flex justify-center">
+              <div className="relative">
+                {form.imageUrl ? (
+                  <ImageWithFallback
+                    src={form.imageUrl}
+                    alt="Product"
+                    className="w-20 h-20 rounded-xl object-cover border-2 border-white dark:border-gray-700 shadow"
+                  />
+                ) : (
+                  <div className="w-20 h-20 rounded-xl bg-gradient-to-br from-[#fef3f7] to-[#f5f0fc] dark:from-gray-700 dark:to-gray-600 flex items-center justify-center">
+                    <Package size={28} className="text-[#e6d7f5] dark:text-amber-400" />
+                  </div>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={handleImageChange}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingImage}
+                  className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-gradient-to-br from-[#e6d7f5] to-[#f5d7e3] dark:from-amber-400 dark:to-amber-500 flex items-center justify-center border-2 border-white dark:border-gray-800 shadow-md disabled:opacity-60"
+                >
+                  {isUploadingImage ? (
+                    <Loader2 size={14} className="text-white animate-spin" />
+                  ) : (
+                    <Camera size={14} className="text-white" />
+                  )}
+                </button>
+              </div>
+            </div>
             <div>
               <Label className="dark:text-gray-100">Product Name</Label>
               <Input

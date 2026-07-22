@@ -24,6 +24,7 @@ export interface SalonProductSummary {
   name: string;
   price: string;
   description: string | null;
+  imageUrl: string | null;
 }
 
 export interface SalonSummary {
@@ -172,7 +173,7 @@ export function updateSalonLocation(idToken: string, latitude: number, longitude
 // URL, ready to hand to updateMyAvatar/updateSalonLogo.
 export async function uploadImage(
   idToken: string,
-  kind: "avatar" | "salon-logo",
+  kind: "avatar" | "salon-logo" | "salon-product",
   file: File
 ): Promise<string> {
   const { uploadUrl, publicUrl } = await apiFetch<{ uploadUrl: string; publicUrl: string }>(
@@ -316,12 +317,14 @@ export interface ManagedProduct {
   name: string;
   price: string;
   description: string | null;
+  imageUrl: string | null;
 }
 
 export interface ProductInput {
   name: string;
   price: number;
   description?: string | null;
+  imageUrl?: string | null;
 }
 
 export function getSalonProductsManage(idToken: string): Promise<ManagedProduct[]> {

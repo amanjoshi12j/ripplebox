@@ -11,6 +11,7 @@ import {
   Gift,
   Loader2,
   Navigation,
+  Package,
 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { ImageWithFallback } from "../../components/figma/ImageWithFallback";
@@ -249,9 +250,20 @@ export function SalonProfileScreen() {
               salon.products.map((product) => (
                 <div
                   key={product.id}
-                  className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-xl border border-transparent dark:border-gray-700"
+                  className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl border border-transparent dark:border-gray-700"
                 >
-                  <div>
+                  {product.imageUrl ? (
+                    <ImageWithFallback
+                      src={product.imageUrl}
+                      alt={product.name}
+                      className="w-12 h-12 rounded-xl object-cover flex-shrink-0"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-xl bg-white dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
+                      <Package size={20} className="text-gray-300 dark:text-gray-500" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
                     <h4 className="text-sm mb-1 text-[#2d2d2d] dark:text-gray-100">{product.name}</h4>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
                       ${parseFloat(product.price).toFixed(2)}

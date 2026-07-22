@@ -10,6 +10,7 @@ import {
   Calendar,
   CalendarCheck,
   Scissors,
+  Package,
   Settings,
   Loader2,
 } from "lucide-react";
@@ -211,6 +212,13 @@ export function SalonDashboard() {
             >
               <Scissors size={24} />
               <span className="text-sm">Services</span>
+            </Button>
+            <Button
+              onClick={() => navigate("/salon/products")}
+              className="h-auto flex-col gap-2 bg-gradient-to-br from-[#fef3f7] to-[#f5f0fc] dark:from-pink-500 dark:to-purple-500 text-[#2d2d2d] dark:text-white hover:opacity-90 rounded-2xl p-4"
+            >
+              <Package size={24} />
+              <span className="text-sm">Products</span>
             </Button>
             <Button
               onClick={() => navigate("/salon/campaigns")}

@@ -13,7 +13,7 @@ export async function getSalons(): Promise<APIGatewayProxyResultV2> {
        ORDER BY name`
     ),
     query(`SELECT id, salon_id, name, price, points_value FROM salon_services ORDER BY created_at`),
-    query(`SELECT id, salon_id, name, price, description FROM salon_products ORDER BY created_at`),
+    query(`SELECT id, salon_id, name, price, description, image_url FROM salon_products ORDER BY created_at`),
   ]);
 
   const servicesBySalon = new Map<
@@ -34,7 +34,7 @@ export async function getSalons(): Promise<APIGatewayProxyResultV2> {
 
   const productsBySalon = new Map<
     string,
-    { id: string; name: string; price: string; description: string | null }[]
+    { id: string; name: string; price: string; description: string | null; imageUrl: string | null }[]
   >();
   for (const row of productRows) {
     const salonId = row.salon_id as string;
@@ -44,6 +44,7 @@ export async function getSalons(): Promise<APIGatewayProxyResultV2> {
       name: row.name as string,
       price: row.price as string,
       description: row.description as string | null,
+      imageUrl: row.image_url as string | null,
     });
     productsBySalon.set(salonId, list);
   }

@@ -76,6 +76,7 @@ CREATE TABLE salon_products (
     name          TEXT NOT NULL,
     price         NUMERIC(10,2) NOT NULL CHECK (price >= 0),
     description   TEXT,
+    image_url     TEXT,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

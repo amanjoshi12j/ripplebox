@@ -7,7 +7,7 @@ import { HttpError } from "../../shared/httpError";
 import { requireOwnedSalonId } from "../../shared/salonAuth";
 import { createUploadUrl, extensionFor } from "../../shared/s3";
 
-const KINDS = new Set(["avatar", "salon-logo"]);
+const KINDS = new Set(["avatar", "salon-logo", "salon-product"]);
 
 export async function getUploadUrl(
   event: APIGatewayProxyEventV2WithJWTAuthorizer
@@ -30,13 +30,17 @@ export async function getUploadUrl(
     throw new HttpError(400, "contentType must be one of: image/jpeg, image/png, image/webp");
   }
 
-  // avatar uploads are scoped to the caller's own id; salon-logo uploads
-  // require the caller to actually own a salon - same ownership-scoping
-  // pattern used throughout (requireOwnedSalonId).
-  const key =
-    kind === "avatar"
-      ? `avatars/${callerId}/${randomUUID()}.${ext}`
-      : `salons/${await requireOwnedSalonId(callerId)}/${randomUUID()}.${ext}`;
+  // avatar uploads are scoped to the caller's own id; salon-logo and
+  // salon-product uploads require the caller to actually own a salon - same
+  // ownership-scoping pattern used throughout (requireOwnedSalonId).
+  let key: string;
+  if (kind === "avatar") {
+    key = `avatars/${callerId}/${randomUUID()}.${ext}`;
+  } else if (kind === "salon-product") {
+    key = `salons/${await requireOwnedSalonId(callerId)}/products/${randomUUID()}.${ext}`;
+  } else {
+    key = `salons/${await requireOwnedSalonId(callerId)}/${randomUUID()}.${ext}`;
+  }
 
   const { uploadUrl, publicUrl } = await createUploadUrl(key, contentType as string);
 

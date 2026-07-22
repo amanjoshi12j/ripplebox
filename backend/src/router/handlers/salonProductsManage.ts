@@ -15,6 +15,7 @@ interface ProductInput {
   name: string;
   price: number;
   description: string | null;
+  imageUrl: string | null;
 }
 
 function parseProductInput(body: unknown): ProductInput {
@@ -29,6 +30,7 @@ function parseProductInput(body: unknown): ProductInput {
     name: b.name.trim(),
     price: b.price,
     description: typeof b.description === "string" ? b.description : null,
+    imageUrl: typeof b.imageUrl === "string" ? b.imageUrl : null,
   };
 }
 
@@ -41,7 +43,7 @@ export async function getSalonProductsManage(
   const salonId = await requireOwnedSalonId(ownerId);
 
   const products = await query(
-    `SELECT id, name, price, description FROM salon_products WHERE salon_id = :salonId::uuid ORDER BY created_at`,
+    `SELECT id, name, price, description, image_url FROM salon_products WHERE salon_id = :salonId::uuid ORDER BY created_at`,
     { salonId }
   );
 
@@ -49,7 +51,13 @@ export async function getSalonProductsManage(
     statusCode: 200,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(
-      products.map((p) => ({ id: p.id, name: p.name, price: p.price, description: p.description }))
+      products.map((p) => ({
+        id: p.id,
+        name: p.name,
+        price: p.price,
+        description: p.description,
+        imageUrl: p.image_url,
+      }))
     ),
   };
 }
@@ -71,9 +79,9 @@ export async function createSalonProduct(
   const salonId = await requireOwnedSalonId(ownerId);
 
   const rows = await query(
-    `INSERT INTO salon_products (salon_id, name, price, description)
-     VALUES (:salonId::uuid, :name, :price, :description)
-     RETURNING id, name, price, description`,
+    `INSERT INTO salon_products (salon_id, name, price, description, image_url)
+     VALUES (:salonId::uuid, :name, :price, :description, :imageUrl)
+     RETURNING id, name, price, description, image_url`,
     { salonId, ...input }
   );
   const p = rows[0];
@@ -81,7 +89,13 @@ export async function createSalonProduct(
   return {
     statusCode: 201,
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id: p.id, name: p.name, price: p.price, description: p.description }),
+    body: JSON.stringify({
+      id: p.id,
+      name: p.name,
+      price: p.price,
+      description: p.description,
+      imageUrl: p.image_url,
+    }),
   };
 }
 
@@ -105,7 +119,7 @@ export async function updateSalonProduct(
   const salonId = await requireOwnedSalonId(ownerId);
 
   const updated = await execute(
-    `UPDATE salon_products SET name = :name, price = :price, description = :description
+    `UPDATE salon_products SET name = :name, price = :price, description = :description, image_url = :imageUrl
      WHERE id = :productId::uuid AND salon_id = :salonId::uuid`,
     { productId, salonId, ...input }
   );
