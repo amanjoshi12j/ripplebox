@@ -1,9 +1,8 @@
 import { useNavigate } from "react-router";
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { Share2, Gift, Calendar, Sparkles, Heart, Loader2 } from "lucide-react";
+import { Share2, Gift, Calendar, CalendarCheck, Heart, Loader2 } from "lucide-react";
 import { Button } from "../../components/ui/button";
-import { Progress } from "../../components/ui/progress";
 import { Badge } from "../../components/ui/badge";
 import { ImageWithFallback } from "../../components/figma/ImageWithFallback";
 import { useAuth } from "../../context/AuthContext";
@@ -12,8 +11,10 @@ import {
   getMe,
   getMyReferrals,
   getMyFavorites,
+  getMyAppointments,
   type SalonSummary,
   type MeResponse,
+  type MyAppointment,
 } from "../../lib/apiClient";
 
 const staggerContainer = {
@@ -33,23 +34,33 @@ export function ClientHome() {
   const [me, setMe] = useState<MeResponse | null>(null);
   const [referralsCompleted, setReferralsCompleted] = useState(0);
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [appointments, setAppointments] = useState<MyAppointment[]>([]);
   const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     if (!auth.idToken) return;
-    Promise.all([getSalons(), getMe(auth.idToken), getMyReferrals(auth.idToken), getMyFavorites(auth.idToken)])
-      .then(([salonList, meData, referrals, favoriteIds]) => {
+    Promise.all([
+      getSalons(),
+      getMe(auth.idToken),
+      getMyReferrals(auth.idToken),
+      getMyFavorites(auth.idToken),
+      getMyAppointments(auth.idToken),
+    ])
+      .then(([salonList, meData, referrals, favoriteIds, myAppointments]) => {
         setSalons(salonList);
         setMe(meData);
         setReferralsCompleted(referrals.totalCompleted);
         setFavorites(favoriteIds);
+        setAppointments(myAppointments);
       })
       .catch(() => setLoadError(true));
   }, [auth.idToken]);
 
   const featuredSalons = (salons ?? []).slice(0, 3);
   const getSalonName = (salonId: string) => salons?.find((s) => s.id === salonId)?.name ?? "Unknown Salon";
-  const lifetimePoints = me?.salonPoints.reduce((sum, p) => sum + p.points, 0) ?? 0;
+  const nextAppointment = appointments
+    .filter((a) => a.status === "pending" || a.status === "confirmed")
+    .sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`))[0];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-800">
@@ -64,33 +75,53 @@ export function ClientHome() {
       </div>
 
       <motion.div className="px-6 -mt-4" variants={staggerContainer} initial="hidden" animate="show">
-        {/* Loyalty progress card */}
+        {/* Upcoming appointment - real booking data, replacing the old decorative "Gold Member" tier card that had no real mechanic behind it */}
         <motion.div
           variants={staggerItem}
           className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 mb-6 border border-gray-100 dark:border-gray-700"
         >
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Your Loyalty Status</p>
-              <h3 className="text-xl text-[#2d2d2d] dark:text-gray-100">Gold Member</h3>
+          {nextAppointment ? (
+            <div className="flex items-center justify-between">
+              <div className="min-w-0">
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Upcoming Appointment</p>
+                <h3 className="text-xl mb-1 text-[#2d2d2d] dark:text-gray-100 truncate">
+                  {nextAppointment.serviceName}
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
+                  {getSalonName(nextAppointment.salonId)} · {new Date(nextAppointment.date).toLocaleDateString(undefined, { month: "short", day: "numeric" })} at {nextAppointment.time}
+                </p>
+                <Badge
+                  className={`mt-2 ${
+                    nextAppointment.status === "confirmed"
+                      ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                      : "bg-[#f5e6c3] dark:bg-amber-900/30 text-[#2d2d2d] dark:text-amber-400"
+                  }`}
+                >
+                  {nextAppointment.status === "confirmed" ? "Confirmed" : "Awaiting confirmation"}
+                </Badge>
+              </div>
+              <button
+                onClick={() => navigate("/client/appointments")}
+                className="flex-shrink-0 w-16 h-16 rounded-full bg-gradient-to-br from-[#e6d7f5] to-[#f5d7e3] dark:from-purple-500 dark:to-pink-500 dark:shadow-[0_0_20px_rgba(192,132,252,0.4)] flex items-center justify-center"
+              >
+                <CalendarCheck size={28} className="text-white" />
+              </button>
             </div>
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#d4af37] to-[#f5e6c3] dark:from-amber-500 dark:to-yellow-500 dark:shadow-[0_0_20px_rgba(251,191,36,0.4)] flex items-center justify-center">
-              <Sparkles size={32} className="text-white" />
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Upcoming Appointment</p>
+                <h3 className="text-lg text-[#2d2d2d] dark:text-gray-100 mb-1">Nothing booked yet</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Find a salon and book your next visit</p>
+              </div>
+              <Button
+                onClick={() => navigate("/client/salons")}
+                className="bg-gradient-to-r from-[#e6d7f5] to-[#f5d7e3] dark:from-purple-500 dark:to-pink-500 text-[#2d2d2d] dark:text-white hover:opacity-90 rounded-xl flex-shrink-0"
+              >
+                Browse
+              </Button>
             </div>
-          </div>
-
-          <div className="mb-3">
-            <div className="flex justify-between text-sm mb-2">
-              <span className="text-gray-600 dark:text-gray-400">Next tier: Platinum</span>
-              <span className="text-[#2d2d2d] dark:text-gray-100">{lifetimePoints} / 500 lifetime pts</span>
-            </div>
-            <Progress value={(lifetimePoints / 500) * 100} className="h-3 bg-gray-100 dark:bg-gray-700" />
-          </div>
-
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            {Math.max(500 - lifetimePoints, 0)} lifetime points to unlock exclusive perks! Redeemable
-            reward points are tracked separately per salon.
-          </p>
+          )}
         </motion.div>
 
         {/* Per-salon points breakdown - these balances are NOT interchangeable */}

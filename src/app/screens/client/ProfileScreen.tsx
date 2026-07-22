@@ -9,11 +9,9 @@ import {
   HelpCircle,
   LogOut,
   ChevronRight,
-  Award,
   Loader2,
 } from "lucide-react";
 import { ImageWithFallback } from "../../components/figma/ImageWithFallback";
-import { Badge } from "../../components/ui/badge";
 import { useAuth } from "../../context/AuthContext";
 import { getMe, type MeResponse } from "../../lib/apiClient";
 
@@ -44,11 +42,6 @@ export function ProfileScreen() {
       icon: Calendar,
       label: "My Appointments",
       action: () => navigate("/client/appointments"),
-    },
-    {
-      icon: Award,
-      label: "Loyalty Status",
-      action: () => {},
     },
     {
       icon: Settings,
@@ -103,22 +96,14 @@ export function ProfileScreen() {
         {/* Profile card */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 mb-6 border border-gray-100 dark:border-gray-700">
           <div className="flex items-center gap-4 mb-4">
-            <div className="relative">
-              <ImageWithFallback
-                src={profile.avatar ?? ""}
-                alt={profile.name}
-                className="w-20 h-20 rounded-full object-cover"
-              />
-              <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-gradient-to-br from-[#d4af37] to-[#f5e6c3] dark:from-amber-500 dark:to-yellow-500 flex items-center justify-center border-2 border-white dark:border-gray-800">
-                <Award size={14} className="text-white" />
-              </div>
-            </div>
+            <ImageWithFallback
+              src={profile.avatar ?? ""}
+              alt={profile.name}
+              className="w-20 h-20 rounded-full object-cover"
+            />
 
             <div className="flex-1">
               <h2 className="text-xl mb-1 text-[#2d2d2d] dark:text-gray-100">{profile.name}</h2>
-              <Badge className="bg-gradient-to-r from-[#d4af37] to-[#f5e6c3] dark:from-amber-500 dark:to-yellow-500 text-white text-xs">
-                Gold Member
-              </Badge>
             </div>
           </div>
 
