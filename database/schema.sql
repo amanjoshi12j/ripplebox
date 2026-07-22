@@ -207,6 +207,13 @@ CREATE TABLE referrals (
     salon_id        UUID NOT NULL REFERENCES salons(id),           -- salon chosen by referrer at invite time
     status          referral_status NOT NULL DEFAULT 'pending',
     points_awarded  INTEGER NOT NULL DEFAULT 0,
+    -- Set once each side's Referral Bonus campaign discount has actually
+    -- been applied to a booking (see campaignDiscount.ts) - independent of
+    -- `status`/points_awarded above, since a campaign discount can apply to
+    -- the referred friend's first booking before the referral even
+    -- completes (completion only happens once the salon logs a real visit).
+    referred_bonus_used_at TIMESTAMPTZ,
+    referrer_bonus_used_at TIMESTAMPTZ,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     completed_at    TIMESTAMPTZ
 );
@@ -216,7 +223,7 @@ CREATE INDEX idx_referrals_salon ON referrals(salon_id);
 
 -- ---------- Campaigns ----------
 
-CREATE TYPE campaign_type AS ENUM ('referral', 'empty_appointment', 'loyalty');
+CREATE TYPE campaign_type AS ENUM ('referral', 'loyalty');
 CREATE TYPE campaign_status AS ENUM ('active', 'paused');
 
 CREATE TABLE campaigns (
@@ -225,12 +232,19 @@ CREATE TABLE campaigns (
     name                TEXT NOT NULL,
     type                campaign_type NOT NULL,
     discount_percent    INTEGER,
+    -- Null = applies to any service; set = only that specific service
+    -- qualifies. ON DELETE SET NULL rather than blocking service deletion -
+    -- services always stay freely deletable (see salonServicesManage.ts).
+    service_id          UUID REFERENCES salon_services(id) ON DELETE SET NULL,
+    -- Only meaningful for type='loyalty' - the client's Nth non-cancelled
+    -- appointment at this salon that the discount triggers on, once, via
+    -- campaignDiscount.ts.
+    visit_threshold     INTEGER,
     status              campaign_status NOT NULL DEFAULT 'active',
     start_date          DATE NOT NULL,
     end_date            DATE NOT NULL,
-    -- No campaign-redemption action exists anywhere in the app yet (unlike
-    -- rewards), so this only ever reflects real usage (0) rather than being
-    -- decorative/fake - nothing increments it until a real redeem flow exists.
+    -- Real usage count now that campaignDiscount.ts actually applies these
+    -- automatically at booking time (see appointments.ts/payments.ts).
     redemptions         INTEGER NOT NULL DEFAULT 0,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );

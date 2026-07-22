@@ -12,24 +12,37 @@ import {
   getSalonCampaigns,
   createSalonCampaign,
   updateSalonCampaign,
+  getSalonServicesManage,
   type CampaignSummary,
+  type ManagedService,
 } from "../../lib/apiClient";
 
-const TYPES = ["referral", "empty_appointment", "loyalty"] as const;
+const TYPES = ["referral", "loyalty"] as const;
 
 interface CampaignForm {
   name: string;
   type: string;
   discountPercent: string;
+  serviceId: string;
+  visitThreshold: string;
   startDate: string;
   endDate: string;
 }
 
-const emptyForm: CampaignForm = { name: "", type: "", discountPercent: "", startDate: "", endDate: "" };
+const emptyForm: CampaignForm = {
+  name: "",
+  type: "",
+  discountPercent: "",
+  serviceId: "any",
+  visitThreshold: "",
+  startDate: "",
+  endDate: "",
+};
 
 export function CampaignCreation() {
   const auth = useAuth();
   const [campaigns, setCampaigns] = useState<CampaignSummary[] | null>(null);
+  const [services, setServices] = useState<ManagedService[]>([]);
   const [loadError, setLoadError] = useState(false);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -44,15 +57,19 @@ export function CampaignCreation() {
   };
 
   useEffect(() => {
+    if (!auth.idToken) return;
     loadCampaigns()?.catch(() => setLoadError(true));
+    getSalonServicesManage(auth.idToken)
+      .then(setServices)
+      .catch(() => {
+        // Non-fatal - campaigns can still be created "any service" without this.
+      });
   }, [auth.idToken]);
 
   const getCampaignTypeColor = (type: string) => {
     switch (type) {
       case "referral":
         return "bg-[#e6d7f5]/20 dark:bg-amber-400/20 text-[#e6d7f5] dark:text-amber-400";
-      case "empty_appointment":
-        return "bg-[#f5d7e3]/20 dark:bg-amber-400/20 text-[#f5d7e3] dark:text-amber-400";
       case "loyalty":
         return "bg-[#d4af37]/20 dark:bg-amber-400/20 text-[#d4af37] dark:text-amber-400";
       default:
@@ -72,7 +89,9 @@ export function CampaignCreation() {
     setForm({
       name: c.name,
       type: c.type,
-      discountPercent: c.discountPercent !== null ? String(c.discountPercent) : "",
+      discountPercent: String(c.discountPercent),
+      serviceId: c.serviceId ?? "any",
+      visitThreshold: c.visitThreshold !== null ? String(c.visitThreshold) : "",
       startDate: c.startDate,
       endDate: c.endDate,
     });
@@ -92,6 +111,19 @@ export function CampaignCreation() {
       setFormError("Please select a campaign type.");
       return;
     }
+    const discountPercent = parseInt(form.discountPercent, 10);
+    if (!Number.isInteger(discountPercent) || discountPercent <= 0 || discountPercent > 100) {
+      setFormError("Discount % is required and must be between 1 and 100.");
+      return;
+    }
+    let visitThreshold: number | null = null;
+    if (form.type === "loyalty") {
+      visitThreshold = parseInt(form.visitThreshold, 10);
+      if (!Number.isInteger(visitThreshold) || visitThreshold <= 0) {
+        setFormError("Please enter which visit number this discount applies on (e.g. 5).");
+        return;
+      }
+    }
     if (!form.startDate || !form.endDate) {
       setFormError("Start and end dates are required.");
       return;
@@ -102,7 +134,9 @@ export function CampaignCreation() {
       const input = {
         name: form.name.trim(),
         type: form.type as (typeof TYPES)[number],
-        discountPercent: form.discountPercent ? parseInt(form.discountPercent, 10) : null,
+        discountPercent,
+        serviceId: form.serviceId === "any" ? null : form.serviceId,
+        visitThreshold,
         startDate: form.startDate,
         endDate: form.endDate,
       };
@@ -131,6 +165,8 @@ export function CampaignCreation() {
         name: c.name,
         type: c.type,
         discountPercent: c.discountPercent,
+        serviceId: c.serviceId,
+        visitThreshold: c.visitThreshold,
         startDate: c.startDate,
         endDate: c.endDate,
         status: c.status === "active" ? "paused" : "active",
@@ -200,7 +236,7 @@ export function CampaignCreation() {
                     <h4 className="text-base mb-2 text-[#2d2d2d] dark:text-gray-100">{campaign.name}</h4>
                     <div className="flex flex-wrap gap-2">
                       <Badge className={getCampaignTypeColor(campaign.type)}>
-                        {campaign.type.replace("_", " ")}
+                        {campaign.type === "referral" ? "Referral Bonus" : "Loyalty Reward"}
                       </Badge>
                       <Badge
                         className={
@@ -217,16 +253,18 @@ export function CampaignCreation() {
                         {campaign.status}
                       </Badge>
                     </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                      {campaign.type === "loyalty" ? `On visit #${campaign.visitThreshold} · ` : ""}
+                      {campaign.serviceName ? campaign.serviceName : "Any service"}
+                    </p>
                   </div>
-                  {campaign.discountPercent !== null && (
-                    <div className="text-right">
-                      <div className="flex items-center justify-end gap-1 text-[#d4af37] dark:text-amber-400 mb-1">
-                        <Percent size={16} />
-                        <span className="text-lg">{campaign.discountPercent}</span>
-                      </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Discount</p>
+                  <div className="text-right">
+                    <div className="flex items-center justify-end gap-1 text-[#d4af37] dark:text-amber-400 mb-1">
+                      <Percent size={16} />
+                      <span className="text-lg">{campaign.discountPercent}</span>
                     </div>
-                  )}
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Discount</p>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 pt-3 border-t border-gray-100 dark:border-gray-700">
@@ -310,11 +348,33 @@ export function CampaignCreation() {
                 </SelectTrigger>
                 <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
                   <SelectItem value="referral" className="dark:text-gray-100 dark:focus:bg-gray-700">Referral Bonus</SelectItem>
-                  <SelectItem value="empty_appointment" className="dark:text-gray-100 dark:focus:bg-gray-700">Empty Appointment</SelectItem>
                   <SelectItem value="loyalty" className="dark:text-gray-100 dark:focus:bg-gray-700">Loyalty Reward</SelectItem>
                 </SelectContent>
               </Select>
+              {form.type === "referral" && (
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+                  Applies automatically: the referred friend's first booking here, and the
+                  referrer's next booking once their friend's visit completes.
+                </p>
+              )}
             </div>
+            {form.type === "loyalty" && (
+              <div>
+                <Label className="dark:text-gray-100">Applies on visit #</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  placeholder="5"
+                  value={form.visitThreshold}
+                  onChange={(e) => setForm((f) => ({ ...f, visitThreshold: e.target.value }))}
+                  className="mt-2 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
+                />
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+                  Applies once, automatically, on the client's Nth booking here - e.g. "5" for
+                  a discount on their 5th visit.
+                </p>
+              </div>
+            )}
             <div>
               <Label className="dark:text-gray-100">Discount (%)</Label>
               <Input
@@ -324,6 +384,22 @@ export function CampaignCreation() {
                 onChange={(e) => setForm((f) => ({ ...f, discountPercent: e.target.value }))}
                 className="mt-2 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
               />
+            </div>
+            <div>
+              <Label className="dark:text-gray-100">Applies To</Label>
+              <Select value={form.serviceId} onValueChange={(v) => setForm((f) => ({ ...f, serviceId: v }))}>
+                <SelectTrigger className="mt-2 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100">
+                  <SelectValue placeholder="Any service" />
+                </SelectTrigger>
+                <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
+                  <SelectItem value="any" className="dark:text-gray-100 dark:focus:bg-gray-700">Any service</SelectItem>
+                  {services.map((s) => (
+                    <SelectItem key={s.id} value={s.id} className="dark:text-gray-100 dark:focus:bg-gray-700">
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>

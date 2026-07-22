@@ -1,5 +1,6 @@
 import { query } from "./db";
 import { HttpError } from "./httpError";
+import { findBestCampaignMatch, consumeCampaignMatch, type CampaignMatch } from "./campaignDiscount";
 
 export interface ResolvedDiscount {
   discountedPrice: number;
@@ -40,4 +41,54 @@ export async function resolveDiscount(
 
   const discountedPrice = Math.round(servicePrice * (100 - discountPercent)) / 100;
   return { discountedPrice, discountPercent };
+}
+
+export interface BestDiscount {
+  discountedPrice: number;
+  discountPercent: number;
+  source: "redemption" | "campaign" | "none";
+  campaignMatch?: CampaignMatch;
+}
+
+// Combines an explicitly-selected reward redemption with any automatically-
+// qualifying campaign discount (referral bonus / loyalty milestone, see
+// campaignDiscount.ts) and picks whichever gives the bigger discount - the
+// two never stack. If the campaign wins, the client's selected redemption
+// (if any) is left completely untouched/unused, so they don't lose it for
+// nothing just because a better automatic discount applied instead.
+export async function resolveBestDiscount(
+  clientId: string,
+  salonId: string,
+  serviceId: string,
+  servicePrice: number,
+  redemptionId: string | null
+): Promise<BestDiscount> {
+  const [redemption, campaignMatch] = await Promise.all([
+    redemptionId ? resolveDiscount(clientId, salonId, redemptionId, servicePrice) : Promise.resolve(null),
+    findBestCampaignMatch(clientId, salonId, serviceId),
+  ]);
+
+  const redemptionPct = redemption?.discountPercent ?? -1;
+  const campaignPct = campaignMatch?.discountPercent ?? -1;
+
+  if (campaignMatch && campaignPct > redemptionPct) {
+    const discountedPrice = Math.round(servicePrice * (100 - campaignMatch.discountPercent)) / 100;
+    return { discountedPrice, discountPercent: campaignMatch.discountPercent, source: "campaign", campaignMatch };
+  }
+  if (redemption) {
+    return { discountedPrice: redemption.discountedPrice, discountPercent: redemption.discountPercent, source: "redemption" };
+  }
+  return { discountedPrice: servicePrice, discountPercent: 0, source: "none" };
+}
+
+// Consumes whichever discount resolveBestDiscount picked, once the booking
+// is confirmed - called inside the appointment-insert transaction. Only
+// handles the campaign side: redemption consumption still goes through the
+// existing resolveDiscount(forUpdate=true) + UPDATE redemptions call sites
+// in appointments.ts unchanged, since that's the only caller and duplicating
+// the lock here would just be another place to keep in sync.
+export async function consumeBestDiscount(best: BestDiscount, tx: string): Promise<void> {
+  if (best.source === "campaign" && best.campaignMatch) {
+    await consumeCampaignMatch(best.campaignMatch, tx);
+  }
 }

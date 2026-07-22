@@ -492,6 +492,12 @@ Resources:
             ApiId: !Ref HttpApi
             Path: /payments/create-intent
             Method: post
+        GetDiscountPreview:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /discount-preview
+            Method: get
         GetUploadUrl:
           Type: HttpApi
           Properties:

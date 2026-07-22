@@ -15,9 +15,11 @@ import {
   createAppointment,
   createPaymentIntent,
   getMyRedemptions,
+  getDiscountPreview,
   type SalonSummary,
   type PaymentMethod,
   type MyRedemption,
+  type DiscountPreview,
 } from "../../lib/apiClient";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -135,6 +137,7 @@ export function BookingScreen() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pay_later");
   const [redemptions, setRedemptions] = useState<MyRedemption[]>([]);
   const [redemptionId, setRedemptionId] = useState<string>("none");
+  const [discountPreview, setDiscountPreview] = useState<DiscountPreview | null>(null);
 
   const [step, setStep] = useState<"form" | "payment" | "done">("form");
   const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -161,15 +164,35 @@ export function BookingScreen() {
 
   const selectedService = salon?.services.find((s) => s.id === serviceId);
   const selectedRedemption = redemptionId !== "none" ? redemptions.find((r) => r.id === redemptionId) : undefined;
-  // Client-side only, for showing a price preview - the real, enforced
-  // discount is always computed server-side (createPaymentIntent /
-  // createAppointment), never trusted from here.
-  const previewPrice =
-    selectedService && selectedRedemption
-      ? Math.round(parseFloat(selectedService.price) * (100 - selectedRedemption.discountPercent!)) / 100
-      : selectedService
-        ? parseFloat(selectedService.price)
-        : null;
+
+  // Real server-side preview - this is the only place that knows whether an
+  // automatic campaign discount (referral bonus / loyalty milestone) beats
+  // whatever reward is selected, since that comparison happens server-side
+  // in resolveBestDiscount. Purely informational either way - the actual
+  // charge/booking always recomputes this fresh at submit time.
+  useEffect(() => {
+    if (!salonId || !auth.idToken || !serviceId) {
+      setDiscountPreview(null);
+      return;
+    }
+    let cancelled = false;
+    getDiscountPreview(auth.idToken, salonId, serviceId, redemptionId !== "none" ? redemptionId : undefined)
+      .then((preview) => {
+        if (!cancelled) setDiscountPreview(preview);
+      })
+      .catch(() => {
+        if (!cancelled) setDiscountPreview(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [salonId, auth.idToken, serviceId, redemptionId]);
+
+  const previewPrice = discountPreview
+    ? discountPreview.discountedPrice
+    : selectedService
+      ? parseFloat(selectedService.price)
+      : null;
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -357,10 +380,10 @@ export function BookingScreen() {
             )}
 
             {selectedService && (
-              <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700">
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700 space-y-2">
                 <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
                   <span>Price</span>
-                  {selectedRedemption ? (
+                  {discountPreview && discountPreview.source !== "none" ? (
                     <span>
                       <span className="line-through mr-2">${parseFloat(selectedService.price).toFixed(2)}</span>
                       <span className="text-[#2d2d2d] dark:text-gray-100">${previewPrice!.toFixed(2)}</span>
@@ -369,6 +392,12 @@ export function BookingScreen() {
                     <span className="text-[#2d2d2d] dark:text-gray-100">${previewPrice!.toFixed(2)}</span>
                   )}
                 </div>
+                {discountPreview?.source === "campaign" && (
+                  <p className="text-xs text-green-600 dark:text-green-400">
+                    🎉 {discountPreview.discountPercent}% off automatically applied — {discountPreview.campaignName}
+                    {selectedRedemption ? " (better than your selected reward, which won't be used)" : ""}
+                  </p>
+                )}
               </div>
             )}
 

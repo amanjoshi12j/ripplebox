@@ -8,7 +8,7 @@ import { requireOwnedSalonId } from "../../shared/salonAuth";
 import { getStripeClient } from "../../shared/stripe";
 import { isUuid } from "../../shared/validation";
 import { insertNotification } from "../../shared/notifications";
-import { resolveDiscount } from "../../shared/rewardDiscount";
+import { resolveDiscount, resolveBestDiscount, consumeBestDiscount } from "../../shared/rewardDiscount";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
@@ -63,11 +63,17 @@ export async function createAppointment(
 
   // Preview only (no lock) - just to know the expected price for the
   // pay_now Stripe-amount check below and the price snapshot either way.
-  // The transaction below re-checks this for real, with a row lock, right
-  // before actually marking the redemption used.
-  const price = redemptionId
-    ? (await resolveDiscount(clientId, salonId as string, redemptionId as string, originalPrice)).discountedPrice
-    : originalPrice;
+  // The transaction below re-checks and consumes whichever source (an
+  // explicit redemption, or an automatic campaign discount - see
+  // resolveBestDiscount) actually won, for real, with a row lock.
+  const best = await resolveBestDiscount(
+    clientId,
+    salonId as string,
+    serviceId as string,
+    originalPrice,
+    (redemptionId as string | undefined) ?? null
+  );
+  const price = best.discountedPrice;
 
   let paymentStatus = "unpaid";
   if (paymentMethod === "pay_now") {
@@ -111,15 +117,19 @@ export async function createAppointment(
   const pointsAwarded = paymentMethod === "pay_now" ? servicePointsValue : 0;
 
   const appt = await runInTransaction(async (tx) => {
-    // The real, race-safe check - locks the redemption row and re-verifies
-    // it's still unused right before this transaction marks it used. If a
-    // concurrent request already consumed it, this throws and the whole
-    // transaction (including any pay_now insert below) rolls back - the
-    // rare cost is a successful Stripe charge with no appointment to show
-    // for it, which is an acceptable edge case here (no refund flow exists
-    // yet regardless, same limitation noted on cancelMyAppointment).
-    if (redemptionId) {
+    // The real, race-safe check - locks whichever source actually won
+    // (either the redemption row, or a campaign's referral row - see
+    // consumeBestDiscount) and re-verifies it's still unused right before
+    // this transaction marks it used. If a concurrent request already
+    // consumed it, this throws and the whole transaction (including any
+    // pay_now insert below) rolls back - the rare cost is a successful
+    // Stripe charge with no appointment to show for it, which is an
+    // acceptable edge case here (no refund flow exists yet regardless, same
+    // limitation noted on cancelMyAppointment).
+    if (best.source === "redemption" && redemptionId) {
       await resolveDiscount(clientId, salonId as string, redemptionId as string, originalPrice, tx, true);
+    } else if (best.source === "campaign") {
+      await consumeBestDiscount(best, tx);
     }
 
     const rows = await query(
@@ -147,7 +157,7 @@ export async function createAppointment(
     );
     const inserted = rows[0];
 
-    if (redemptionId) {
+    if (best.source === "redemption" && redemptionId) {
       await execute(
         `UPDATE redemptions SET used_at = now(), applied_appointment_id = :appointmentId::uuid
          WHERE id = :redemptionId::uuid`,

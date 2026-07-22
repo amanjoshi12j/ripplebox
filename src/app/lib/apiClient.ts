@@ -389,8 +389,11 @@ export function getMyReferrals(idToken: string): Promise<MyReferralsResponse> {
 export interface CampaignSummary {
   id: string;
   name: string;
-  type: "referral" | "empty_appointment" | "loyalty";
-  discountPercent: number | null;
+  type: "referral" | "loyalty";
+  discountPercent: number;
+  serviceId: string | null;
+  serviceName: string | null;
+  visitThreshold: number | null;
   status: "active" | "paused";
   startDate: string;
   endDate: string;
@@ -399,8 +402,10 @@ export interface CampaignSummary {
 
 export interface CampaignInput {
   name: string;
-  type: "referral" | "empty_appointment" | "loyalty";
-  discountPercent: number | null;
+  type: "referral" | "loyalty";
+  discountPercent: number;
+  serviceId: string | null;
+  visitThreshold: number | null;
   startDate: string;
   endDate: string;
 }
@@ -572,4 +577,28 @@ export function createPaymentIntent(
     method: "POST",
     body: { salonId, serviceId, redemptionId: redemptionId ?? null },
   });
+}
+
+export interface DiscountPreview {
+  originalPrice: number;
+  discountedPrice: number;
+  discountPercent: number;
+  source: "redemption" | "campaign" | "none";
+  campaignName: string | null;
+}
+
+// Read-only preview so BookingScreen can show *why* the price changed - an
+// automatically-applied campaign discount (referral bonus / loyalty
+// milestone) vs. an explicitly selected reward - before the client commits
+// to a payment method. The real, enforced discount is always recomputed
+// server-side at booking time regardless of what this returns.
+export function getDiscountPreview(
+  idToken: string,
+  salonId: string,
+  serviceId: string,
+  redemptionId?: string
+): Promise<DiscountPreview> {
+  const params = new URLSearchParams({ salonId, serviceId });
+  if (redemptionId) params.set("redemptionId", redemptionId);
+  return apiFetch<DiscountPreview>(`/discount-preview?${params.toString()}`, { idToken });
 }

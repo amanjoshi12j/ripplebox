@@ -40,7 +40,7 @@ import {
   updateSalonAppointmentStatus,
   cancelMyAppointment,
 } from "./handlers/appointments";
-import { createPaymentIntent } from "./handlers/payments";
+import { createPaymentIntent, getDiscountPreview } from "./handlers/payments";
 import { getUploadUrl } from "./handlers/uploads";
 import { HttpError } from "../shared/httpError";
 
@@ -97,6 +97,7 @@ const routes: Record<string, RouteHandler> = {
   "PATCH /salon/appointments/{appointmentId}": updateSalonAppointmentStatus,
   "PATCH /appointments/{appointmentId}/cancel": cancelMyAppointment,
   "POST /payments/create-intent": createPaymentIntent,
+  "GET /discount-preview": getDiscountPreview,
   "POST /uploads/presign": getUploadUrl,
   "PATCH /me/avatar": updateMyAvatar,
   "PATCH /salon/me/logo": updateSalonLogo,
