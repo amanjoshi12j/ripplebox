@@ -115,7 +115,7 @@ export function ChatBubble() {
     <div className="fixed inset-x-0 bottom-0 z-50 max-w-md mx-auto pointer-events-none">
       {/* Chat window */}
       {isOpen && (
-        <div className="pointer-events-auto absolute bottom-24 right-4 w-[calc(100%-2rem)] max-w-sm h-[28rem] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 flex flex-col overflow-hidden">
+        <div className="pointer-events-auto absolute bottom-28 right-4 w-[calc(100%-2rem)] max-w-sm h-[28rem] bg-white/95 dark:bg-gray-800/90 glass-surface rounded-3xl shadow-2xl dark:shadow-black/50 border border-gray-100 dark:border-gray-700/60 flex flex-col overflow-hidden">
           {/* Header */}
           <div className="bg-gradient-to-r from-[#e6d7f5] to-[#f5d7e3] dark:from-purple-600 dark:to-pink-600 px-4 py-3 flex items-center justify-between">
             <span className="text-sm text-[#2d2d2d] dark:text-white">RippleBox Assistant</span>
@@ -191,10 +191,13 @@ export function ChatBubble() {
       {/* Floating bubble button */}
       <button
         onClick={() => setIsOpen((prev) => !prev)}
-        className="pointer-events-auto absolute bottom-24 right-4 w-14 h-14 rounded-full bg-gradient-to-br from-[#e6d7f5] to-[#f5d7e3] shadow-xl flex items-center justify-center hover:scale-105 transition-transform"
+        className="pointer-events-auto absolute bottom-24 right-4 w-14 h-14 rounded-full bg-gradient-to-br from-[#e6d7f5] to-[#f5d7e3] dark:from-purple-500 dark:to-pink-500 shadow-xl dark:shadow-purple-500/30 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
         aria-label="Open chat"
       >
-        {isOpen ? <X size={24} className="text-[#2d2d2d]" /> : <MessageCircle size={24} className="text-[#2d2d2d]" />}
+        {!isOpen && (
+          <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-[#d4af37] dark:bg-amber-400 border-2 border-white dark:border-gray-900 animate-pulse" />
+        )}
+        {isOpen ? <X size={24} className="text-[#2d2d2d] dark:text-white" /> : <MessageCircle size={24} className="text-[#2d2d2d] dark:text-white" />}
       </button>
     </div>
   );

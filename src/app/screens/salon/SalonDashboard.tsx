@@ -111,13 +111,15 @@ export function SalonDashboard() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-800 pb-6">
       {/* Header */}
-      <div className="bg-gradient-to-br from-[#f5e6c3] to-[#d4af37]/30 dark:from-gray-800 dark:to-gray-900 px-6 pt-12 pb-8 rounded-b-3xl">
-        <div className="flex items-center justify-between mb-4">
+      <div className="relative overflow-hidden bg-gradient-to-br from-[#f5e6c3] to-[#d4af37]/30 dark:from-gray-800 dark:to-gray-900 px-6 pt-12 pb-8 rounded-b-3xl">
+        <div className="pointer-events-none absolute -top-16 -right-16 w-56 h-56 rounded-full bg-amber-500/0 dark:bg-amber-500/20 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-20 -left-10 w-48 h-48 rounded-full bg-yellow-500/0 dark:bg-yellow-500/10 blur-3xl" />
+        <div className="relative flex items-center justify-between mb-4">
           <div className="flex items-center gap-4">
             <ImageWithFallback
               src={salon.image ?? ""}
               alt={salon.name}
-              className="w-16 h-16 rounded-full object-cover border-2 border-white dark:border-gray-700 shadow-md"
+              className="w-16 h-16 rounded-full object-cover border-2 border-white dark:border-gray-700 shadow-md dark:shadow-[0_0_16px_rgba(251,191,36,0.25)]"
             />
             <div>
               <h1 className="text-2xl mb-1 text-[#2d2d2d] dark:text-gray-100">{salon.name}</h1>

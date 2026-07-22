@@ -1,5 +1,23 @@
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * Every screen in this app hand-writes its dark mode with literal
+ * `dark:bg-gray-800`, `dark:from-gray-900`, `dark:border-gray-700` etc.
+ * rather than the semantic --card/--background tokens below (which only
+ * back the shadcn/ui primitives). gray-700/800/900 are confirmed used
+ * *exclusively* in dark: variants app-wide (verified via full-repo grep -
+ * zero light-mode usages), so redefining just these three here reskins
+ * every screen's dark backgrounds/cards/borders at once, with no risk to
+ * light mode. gray-50 through gray-600 are NOT touched here - they're
+ * shared with real light-mode usage (ImageWithFallback, helper text, etc.)
+ * and overriding them would break that.
+ */
+@theme {
+  --color-gray-700: #332c47;
+  --color-gray-800: #1e1a2b;
+  --color-gray-900: #15121e;
+}
+
 :root {
   --font-size: 16px;
   --background: #ffffff;
@@ -185,5 +203,43 @@
     font-size: var(--text-base);
     font-weight: var(--font-weight-normal);
     line-height: 1.5;
+  }
+
+  /* Smooth, app-wide feel when toggling light/dark rather than a hard snap. */
+  * {
+    transition-property: background-color, border-color, color, box-shadow;
+    transition-duration: 200ms;
+    transition-timing-function: ease;
+  }
+
+  ::selection {
+    background-color: #d4af37;
+    color: #2d2d2d;
+  }
+
+  /* Themed scrollbar - the browser default is jarringly light-gray against
+     the app's dark surfaces. */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(212, 175, 55, 0.35);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(212, 175, 55, 0.55);
+  }
+}
+
+@layer utilities {
+  /* Frosted-glass surface for chrome that floats above content (bottom nav,
+     chat bubble) - reused instead of copy-pasted across those components. */
+  .glass-surface {
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
   }
 }

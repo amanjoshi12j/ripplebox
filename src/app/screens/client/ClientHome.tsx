@@ -54,11 +54,13 @@ export function ClientHome() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-800">
       {/* Header */}
-      <div className="bg-gradient-to-br from-[#fef3f7] to-[#f5f0fc] dark:from-gray-800 dark:to-gray-900 px-6 pt-12 pb-8 rounded-b-3xl">
-        <h1 className="text-2xl mb-1 text-[#2d2d2d] dark:text-gray-100">
+      <div className="relative overflow-hidden bg-gradient-to-br from-[#fef3f7] to-[#f5f0fc] dark:from-gray-800 dark:to-gray-900 px-6 pt-12 pb-8 rounded-b-3xl">
+        <div className="pointer-events-none absolute -top-16 -right-16 w-56 h-56 rounded-full bg-purple-500/0 dark:bg-purple-500/20 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-20 -left-10 w-48 h-48 rounded-full bg-pink-500/0 dark:bg-pink-500/10 blur-3xl" />
+        <h1 className="relative text-2xl mb-1 text-[#2d2d2d] dark:text-gray-100">
           Hi{me ? `, ${me.name.split(" ")[0]}` : ""} ✨
         </h1>
-        <p className="text-gray-500 dark:text-gray-400 text-sm">Welcome back to your beauty hub</p>
+        <p className="relative text-gray-500 dark:text-gray-400 text-sm">Welcome back to your beauty hub</p>
       </div>
 
       <motion.div className="px-6 -mt-4" variants={staggerContainer} initial="hidden" animate="show">
@@ -72,7 +74,7 @@ export function ClientHome() {
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Your Loyalty Status</p>
               <h3 className="text-xl text-[#2d2d2d] dark:text-gray-100">Gold Member</h3>
             </div>
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#d4af37] to-[#f5e6c3] dark:from-amber-500 dark:to-yellow-500 flex items-center justify-center">
+            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#d4af37] to-[#f5e6c3] dark:from-amber-500 dark:to-yellow-500 dark:shadow-[0_0_20px_rgba(251,191,36,0.4)] flex items-center justify-center">
               <Sparkles size={32} className="text-white" />
             </div>
           </div>
