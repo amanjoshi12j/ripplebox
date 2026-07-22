@@ -123,7 +123,20 @@ export function SignupScreen() {
     } catch (err) {
       const code = err instanceof Error ? err.name : "";
       if (code === "UsernameExistsException") {
-        setError("An account with that email already exists.");
+        // Cognito throws this even when the existing account was never
+        // confirmed (e.g. the person closed the tab before entering their
+        // code and is now retrying signup) - there's no way to tell from
+        // this error alone whether they need to sign in or just need a
+        // fresh code. Resending settles it: Cognito only allows a resend
+        // for an unconfirmed account, so success here means "still
+        // unconfirmed" and we can send them straight to the verify step
+        // with a new code, rather than dead-ending on "already exists."
+        try {
+          await resendConfirmationCode(email);
+          setStep("verify");
+        } catch {
+          setError("An account with that email already exists. Please sign in instead.");
+        }
       } else if (code === "InvalidPasswordException") {
         setError("Password must be at least 8 characters.");
       } else {
