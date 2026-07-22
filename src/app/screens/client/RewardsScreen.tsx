@@ -65,11 +65,11 @@ export function RewardsScreen() {
   const getCategoryIcon = (category: string | null) => {
     switch (category) {
       case "discount":
-        return <Zap size={20} className="text-[#e6d7f5]" />;
+        return <Zap size={20} className="text-[#c9a3e8] dark:text-purple-300" />;
       case "freebie":
-        return <Gift size={20} className="text-[#f5d7e3]" />;
+        return <Gift size={20} className="text-[#e88fae] dark:text-pink-300" />;
       case "credit":
-        return <DollarSign size={20} className="text-[#e6d7f5]" />;
+        return <DollarSign size={20} className="text-[#c9a3e8] dark:text-purple-300" />;
       default:
         return <Gift size={20} />;
     }
@@ -121,24 +121,26 @@ export function RewardsScreen() {
   return (
     <div className="min-h-screen bg-white dark:bg-gradient-to-br dark:from-gray-900 dark:to-gray-800 pb-6">
       {/* Header */}
-      <div className="bg-gradient-to-br from-[#fef3f7] to-[#f5f0fc] dark:from-gray-900 dark:to-gray-800 px-6 pt-12 pb-8 rounded-b-3xl">
-        <div className="flex items-center gap-3 mb-2">
+      <div className="relative overflow-hidden bg-gradient-to-br from-[#fef3f7] to-[#f5f0fc] dark:from-gray-900 dark:to-gray-800 px-6 pt-12 pb-8 rounded-b-3xl">
+        <div className="pointer-events-none absolute -top-16 -right-16 w-56 h-56 rounded-full bg-purple-500/0 dark:bg-purple-500/20 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-20 -left-10 w-48 h-48 rounded-full bg-pink-500/0 dark:bg-pink-500/10 blur-3xl" />
+        <div className="relative flex items-center gap-3 mb-2">
           <img src={referralRewardsIcon} alt="Earn & Redeem Rewards" className="w-10 h-10" />
           <h1 className="text-2xl text-[#2d2d2d] dark:text-gray-100">Your Rewards</h1>
         </div>
-        <p className="text-gray-500 dark:text-gray-400 text-sm">
+        <p className="relative text-gray-500 dark:text-gray-400 text-sm">
           Points are earned per salon and can only be redeemed at that same salon
         </p>
 
         {/* Lifetime points summary (informational only - not a spendable pool) */}
-        <div className="bg-white dark:bg-gray-800 dark:border dark:border-gray-700 rounded-2xl shadow-lg p-6 mt-6">
+        <div className="relative bg-white dark:bg-gray-800 dark:border dark:border-gray-700 rounded-2xl shadow-lg p-6 mt-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Lifetime Points (all salons)</p>
               <h2 className="text-3xl text-[#2d2d2d] dark:text-gray-100">{totalPoints}</h2>
               <p className="text-xs text-gray-400 mt-1">See breakdown by salon below</p>
             </div>
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#e6d7f5] to-[#f5d7e3] flex items-center justify-center">
+            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#e6d7f5] to-[#f5d7e3] dark:from-purple-500 dark:to-pink-500 dark:shadow-[0_0_20px_rgba(192,132,252,0.4)] flex items-center justify-center">
               <Gift size={32} className="text-white" />
             </div>
           </div>
@@ -194,10 +196,10 @@ export function RewardsScreen() {
                         return (
                           <div
                             key={reward.id}
-                            className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-md border border-gray-100 dark:border-gray-700"
+                            className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-md dark:shadow-black/20 border border-gray-100 dark:border-gray-700 hover:shadow-lg hover:-translate-y-0.5 transition-[transform,box-shadow] duration-200"
                           >
                             <div className="flex items-start gap-4">
-                              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#fef3f7] to-[#f5f0fc] dark:from-purple-900/30 dark:to-pink-900/30 flex items-center justify-center flex-shrink-0">
+                              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#fef3f7] to-[#f5f0fc] dark:from-purple-900/40 dark:to-pink-900/40 dark:shadow-[0_0_12px_rgba(192,132,252,0.15)] flex items-center justify-center flex-shrink-0">
                                 {getCategoryIcon(reward.category)}
                               </div>
 
@@ -237,7 +239,9 @@ export function RewardsScreen() {
                                     size="sm"
                                     disabled={!canRedeem || isRedeeming}
                                     onClick={() => handleRedeem(reward)}
-                                    className="bg-gradient-to-r from-[#e6d7f5] to-[#f5d7e3] text-[#2d2d2d] hover:opacity-90 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed"
+                                    className={`bg-gradient-to-r from-[#e6d7f5] to-[#f5d7e3] text-[#2d2d2d] hover:opacity-90 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed ${
+                                      canRedeem ? "dark:shadow-[0_0_14px_rgba(192,132,252,0.35)]" : ""
+                                    }`}
                                   >
                                     {isRedeeming ? (
                                       <Loader2 size={14} className="animate-spin" />
@@ -276,7 +280,7 @@ export function RewardsScreen() {
                 {redemptions.map((redemption) => (
                   <div
                     key={redemption.id}
-                    className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-5 border border-gray-200 dark:border-gray-700"
+                    className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow duration-200"
                   >
                     <div className="flex items-start gap-4">
                       <div className="w-12 h-12 rounded-xl bg-gray-200 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">

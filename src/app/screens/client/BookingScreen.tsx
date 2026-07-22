@@ -310,8 +310,9 @@ export function BookingScreen() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-800 pb-20">
-      <div className="bg-gradient-to-br from-[#fef3f7] to-[#f5f0fc] dark:from-gray-800 dark:to-gray-900 px-6 pt-12 pb-8 rounded-b-3xl">
-        <div className="flex items-center gap-4 mb-2">
+      <div className="relative overflow-hidden bg-gradient-to-br from-[#fef3f7] to-[#f5f0fc] dark:from-gray-800 dark:to-gray-900 px-6 pt-12 pb-8 rounded-b-3xl">
+        <div className="pointer-events-none absolute -top-16 -right-16 w-56 h-56 rounded-full bg-purple-500/0 dark:bg-purple-500/20 blur-3xl" />
+        <div className="relative flex items-center gap-4 mb-2">
           <button
             onClick={() => (step === "payment" ? setStep("form") : navigate(-1))}
             className="p-2 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-full transition-colors"
@@ -320,7 +321,7 @@ export function BookingScreen() {
           </button>
           <h1 className="text-2xl text-[#2d2d2d] dark:text-gray-100">Book Appointment</h1>
         </div>
-        <p className="text-gray-500 dark:text-gray-400 text-sm pl-14">{salon.name}</p>
+        <p className="relative text-gray-500 dark:text-gray-400 text-sm pl-14">{salon.name}</p>
       </div>
 
       <div className="px-6 mt-6">
@@ -380,7 +381,13 @@ export function BookingScreen() {
             )}
 
             {selectedService && (
-              <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700 space-y-2">
+              <div
+                className={`rounded-xl p-4 border space-y-2 transition-colors ${
+                  discountPreview && discountPreview.source !== "none"
+                    ? "bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800"
+                    : "bg-gray-50 dark:bg-gray-800 border-gray-100 dark:border-gray-700"
+                }`}
+              >
                 <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
                   <span>Price</span>
                   {discountPreview && discountPreview.source !== "none" ? (
@@ -426,13 +433,17 @@ export function BookingScreen() {
 
             <div>
               <Label className="dark:text-gray-100 mb-3 block">Payment</Label>
-              <RadioGroup value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as PaymentMethod)}>
+              <RadioGroup value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as PaymentMethod)} className="space-y-2">
                 <label
                   htmlFor="pay_later"
-                  className="flex items-center gap-3 p-3 rounded-xl border border-gray-200 dark:border-gray-700 cursor-pointer"
+                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                    paymentMethod === "pay_later"
+                      ? "border-[#e6d7f5] dark:border-purple-500 bg-[#f5f0fc]/60 dark:bg-purple-900/20"
+                      : "border-gray-200 dark:border-gray-700"
+                  }`}
                 >
                   <RadioGroupItem value="pay_later" id="pay_later" />
-                  <Banknote size={20} className="text-[#e6d7f5] dark:text-purple-400" />
+                  <Banknote size={20} className="text-[#c9a3e8] dark:text-purple-400" />
                   <div>
                     <p className="text-sm text-[#2d2d2d] dark:text-gray-100">Pay Later</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Pay in person at the salon</p>
@@ -440,12 +451,14 @@ export function BookingScreen() {
                 </label>
                 <label
                   htmlFor="pay_now"
-                  className={`flex items-center gap-3 p-3 rounded-xl border border-gray-200 dark:border-gray-700 ${
-                    isStripeConfigured() ? "cursor-pointer" : "opacity-50 cursor-not-allowed"
-                  }`}
+                  className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${
+                    paymentMethod === "pay_now"
+                      ? "border-[#e6d7f5] dark:border-purple-500 bg-[#f5f0fc]/60 dark:bg-purple-900/20"
+                      : "border-gray-200 dark:border-gray-700"
+                  } ${isStripeConfigured() ? "cursor-pointer" : "opacity-50 cursor-not-allowed"}`}
                 >
                   <RadioGroupItem value="pay_now" id="pay_now" disabled={!isStripeConfigured()} />
-                  <CreditCard size={20} className="text-[#e6d7f5] dark:text-purple-400" />
+                  <CreditCard size={20} className="text-[#c9a3e8] dark:text-purple-400" />
                   <div>
                     <p className="text-sm text-[#2d2d2d] dark:text-gray-100">Pay Now</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -461,7 +474,7 @@ export function BookingScreen() {
             <Button
               type="submit"
               disabled={isSubmitting || !serviceId || !date || !time}
-              className="w-full h-14 bg-gradient-to-r from-[#e6d7f5] to-[#f5d7e3] dark:from-purple-500 dark:to-pink-500 text-[#2d2d2d] dark:text-white hover:opacity-90 rounded-2xl flex items-center justify-center gap-2"
+              className="w-full h-14 bg-gradient-to-r from-[#e6d7f5] to-[#f5d7e3] dark:from-purple-500 dark:to-pink-500 dark:shadow-[0_0_20px_rgba(192,132,252,0.35)] text-[#2d2d2d] dark:text-white hover:opacity-90 rounded-2xl flex items-center justify-center gap-2 disabled:dark:shadow-none"
             >
               {isSubmitting && <Loader2 size={18} className="animate-spin" />}
               {paymentMethod === "pay_now" ? "Continue to Payment" : "Request Booking"}

@@ -100,10 +100,13 @@ export function SalonProfileScreen() {
           className="w-full h-full object-cover"
         />
 
+        {/* Bottom scrim so the reward badge and page content below stay legible against any photo */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/40 dark:from-black/60 to-transparent" />
+
         {/* Back button */}
         <button
           onClick={() => navigate(-1)}
-          className="absolute top-6 left-6 w-10 h-10 rounded-full bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm flex items-center justify-center hover:bg-white dark:hover:bg-gray-800 transition-colors"
+          className="absolute top-6 left-6 w-10 h-10 rounded-full bg-white/90 dark:bg-gray-800/80 glass-surface flex items-center justify-center hover:bg-white dark:hover:bg-gray-800 transition-colors shadow-md"
         >
           <ArrowLeft size={20} className="text-[#2d2d2d] dark:text-gray-100" />
         </button>
@@ -112,21 +115,21 @@ export function SalonProfileScreen() {
         <div className="absolute top-6 right-6 flex gap-2">
           <button
             onClick={toggleFavorite}
-            className="w-10 h-10 rounded-full bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm flex items-center justify-center hover:bg-white dark:hover:bg-gray-800 transition-colors"
+            className="w-10 h-10 rounded-full bg-white/90 dark:bg-gray-800/80 glass-surface flex items-center justify-center hover:bg-white dark:hover:bg-gray-800 transition-colors shadow-md"
           >
             <Heart
               size={20}
-              className={isFavorite ? "fill-[#f5d7e3] dark:fill-pink-400 text-[#f5d7e3] dark:text-pink-400" : "text-gray-400 dark:text-gray-500"}
+              className={isFavorite ? "fill-[#f5d7e3] dark:fill-pink-400 text-[#f5d7e3] dark:text-pink-400 dark:drop-shadow-[0_0_6px_rgba(244,114,182,0.6)]" : "text-gray-400 dark:text-gray-500"}
             />
           </button>
-          <button className="w-10 h-10 rounded-full bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm flex items-center justify-center hover:bg-white dark:hover:bg-gray-800 transition-colors">
+          <button className="w-10 h-10 rounded-full bg-white/90 dark:bg-gray-800/80 glass-surface flex items-center justify-center hover:bg-white dark:hover:bg-gray-800 transition-colors shadow-md">
             <Share2 size={20} className="text-[#2d2d2d] dark:text-gray-100" />
           </button>
         </div>
 
         {/* Reward badge */}
         {parseFloat(salon.rewardMultiplier) > 1 && (
-          <div className="absolute bottom-4 left-6 bg-gradient-to-r from-[#d4af37] to-[#f5e6c3] dark:from-amber-500 dark:to-yellow-500 text-white px-4 py-2 rounded-full text-sm flex items-center gap-2">
+          <div className="absolute bottom-4 left-6 bg-gradient-to-r from-[#d4af37] to-[#f5e6c3] dark:from-amber-500 dark:to-yellow-500 dark:shadow-[0_0_16px_rgba(251,191,36,0.5)] text-white px-4 py-2 rounded-full text-sm flex items-center gap-2">
             <Gift size={16} />
             <span>{parseFloat(salon.rewardMultiplier)}x Rewards Active</span>
           </div>
@@ -217,7 +220,7 @@ export function SalonProfileScreen() {
               salon.services.map((service) => (
                 <div
                   key={service.id}
-                  className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-xl border border-transparent dark:border-gray-700"
+                  className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-xl border border-transparent dark:border-gray-700 hover:shadow-md dark:hover:border-purple-500/30 transition-shadow duration-200"
                 >
                   <div>
                     <h4 className="text-sm mb-1 text-[#2d2d2d] dark:text-gray-100">{service.name}</h4>
@@ -250,7 +253,7 @@ export function SalonProfileScreen() {
               salon.products.map((product) => (
                 <div
                   key={product.id}
-                  className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl border border-transparent dark:border-gray-700"
+                  className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl border border-transparent dark:border-gray-700 hover:shadow-md dark:hover:border-purple-500/30 transition-shadow duration-200"
                 >
                   {product.imageUrl ? (
                     <ImageWithFallback
@@ -316,7 +319,7 @@ export function SalonProfileScreen() {
         {/* Book button */}
         <Button
           onClick={() => navigate(`/client/salons/${salon.id}/book`)}
-          className="w-full h-14 bg-gradient-to-r from-[#e6d7f5] to-[#f5d7e3] dark:from-purple-500 dark:to-pink-500 text-[#2d2d2d] dark:text-white hover:opacity-90 rounded-2xl mt-6"
+          className="w-full h-14 bg-gradient-to-r from-[#e6d7f5] to-[#f5d7e3] dark:from-purple-500 dark:to-pink-500 dark:shadow-[0_0_20px_rgba(192,132,252,0.35)] text-[#2d2d2d] dark:text-white hover:opacity-90 rounded-2xl mt-6"
         >
           Book Appointment
         </Button>
