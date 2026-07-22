@@ -16,6 +16,18 @@
   --color-gray-700: #332c47;
   --color-gray-800: #1e1a2b;
   --color-gray-900: #15121e;
+
+  /*
+   * Light mode's page canvas is `from-gray-50 to-white` (nearly every
+   * screen's root div) with cards sitting on top as plain `bg-white` -
+   * gray-50 (#f9fafb) is so close to white that cards barely separated
+   * from the page behind them ("is the background too white?"). Verified
+   * gray-50 is used *exclusively* unprefixed/light-mode app-wide (zero
+   * dark: usages), so warming just this one shade gives every screen's
+   * canvas real contrast against its white cards without touching dark
+   * mode or any other gray shade.
+   */
+  --color-gray-50: #f6f1ea;
 }
 
 :root {
@@ -237,9 +249,12 @@
 
 @layer utilities {
   /* Frosted-glass surface for chrome that floats above content (bottom nav,
-     chat bubble) - reused instead of copy-pasted across those components. */
+     chat bubble) - reused instead of copy-pasted across those components.
+     The saturate() boost is the classic "liquid glass" trick: it makes
+     whatever's blurred behind the surface look richer/more vivid, which is
+     what actually reads as "glass" rather than just a semi-transparent panel. */
   .glass-surface {
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
   }
 }

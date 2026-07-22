@@ -31,7 +31,7 @@ export function SalonOwnerLayout() {
       </div>
 
       {/* Bottom navigation - floating glass pill, inset from the edges */}
-      <nav className="fixed bottom-3 left-3 right-3 max-w-md mx-auto bg-white/90 dark:bg-gray-800/80 glass-surface border border-gray-100 dark:border-gray-700/60 px-3 py-2.5 rounded-3xl shadow-xl dark:shadow-black/40">
+      <nav className="fixed bottom-3 left-3 right-3 max-w-md mx-auto bg-white/55 dark:bg-gray-800/45 glass-surface border border-white/60 dark:border-white/10 px-3 py-2.5 rounded-3xl shadow-[0_8px_32px_rgba(212,175,55,0.2),inset_0_1px_0_rgba(255,255,255,0.6)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.07)]">
         <div className="flex justify-around items-center">
           {navItems.map(({ to, end, icon: Icon, label }) => (
             <NavLink key={to} to={to} end={end}>
