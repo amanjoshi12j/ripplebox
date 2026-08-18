@@ -11,6 +11,16 @@ function roleFromIdToken(idToken: string): string {
   return payload["custom:role"];
 }
 
+function roleMatchesLoginType(actualRole: string, loginType: "user" | "salon" | null): boolean {
+  return loginType === "salon" ? actualRole === "salon_owner" : actualRole !== "salon_owner";
+}
+
+function wrongPersonaMessage(actualRole: string): string {
+  return actualRole === "salon_owner"
+    ? 'This account is registered as a salon owner. Please use "Sign in as Salon Owner" instead.'
+    : 'This account is registered as a client. Please use "Sign in as User" instead.';
+}
+
 export function LoginScreen() {
   const navigate = useNavigate();
   const auth = useAuth();
@@ -38,12 +48,17 @@ export function LoginScreen() {
         return;
       }
 
-      auth.login(result.tokens);
+      // The credentials are valid, but make sure the account's real role
+      // matches the tab they signed in on - correct creds for the other
+      // persona shouldn't silently drop them into the wrong dashboard.
+      const actualRole = roleFromIdToken(result.tokens.idToken);
+      if (!roleMatchesLoginType(actualRole, loginType)) {
+        setError(wrongPersonaMessage(actualRole));
+        return;
+      }
 
-      // Navigate on the account's actual role, not just which tab they
-      // clicked - a client account clicking "Salon Owner" shouldn't land
-      // on the salon dashboard just because they clicked the wrong button.
-      navigate(roleFromIdToken(result.tokens.idToken) === "salon_owner" ? "/salon" : "/client");
+      auth.login(result.tokens);
+      navigate(actualRole === "salon_owner" ? "/salon" : "/client");
     } catch (err) {
       const code = err instanceof Error ? err.name : "";
       if (code === "UserNotConfirmedException") {
@@ -68,8 +83,16 @@ export function LoginScreen() {
 
     try {
       const tokens = await confirmMfaCode(mfaChallenge.username, mfaChallenge.session, mfaCode.trim());
+
+      const actualRole = roleFromIdToken(tokens.idToken);
+      if (!roleMatchesLoginType(actualRole, loginType)) {
+        setError(wrongPersonaMessage(actualRole));
+        setMfaChallenge(null);
+        return;
+      }
+
       auth.login(tokens);
-      navigate(roleFromIdToken(tokens.idToken) === "salon_owner" ? "/salon" : "/client");
+      navigate(actualRole === "salon_owner" ? "/salon" : "/client");
     } catch (err) {
       const code = err instanceof Error ? err.name : "";
       if (code === "CodeMismatchException") {
