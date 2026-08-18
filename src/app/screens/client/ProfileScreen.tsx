@@ -6,26 +6,32 @@ import {
   Phone,
   Calendar,
   Settings,
-  HelpCircle,
   LogOut,
   ChevronRight,
   Loader2,
 } from "lucide-react";
 import { ImageWithFallback } from "../../components/figma/ImageWithFallback";
 import { useAuth } from "../../context/AuthContext";
-import { getMe, type MeResponse } from "../../lib/apiClient";
+import { getMe, getMyReferrals, getMyAppointments, type MeResponse } from "../../lib/apiClient";
 
 export function ProfileScreen() {
   const navigate = useNavigate();
   const auth = useAuth();
   const [profile, setProfile] = useState<MeResponse | null>(null);
+  const [referralsCompleted, setReferralsCompleted] = useState(0);
+  const [appointmentCount, setAppointmentCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     if (!auth.idToken) return;
-    getMe(auth.idToken)
-      .then(setProfile)
+    const idToken = auth.idToken;
+    Promise.all([getMe(idToken), getMyReferrals(idToken), getMyAppointments(idToken)])
+      .then(([me, referrals, appointments]) => {
+        setProfile(me);
+        setReferralsCompleted(referrals.totalCompleted);
+        setAppointmentCount(appointments.length);
+      })
       .catch(() => setLoadError(true))
       .finally(() => setIsLoading(false));
   }, [auth.idToken]);
@@ -47,11 +53,6 @@ export function ProfileScreen() {
       icon: Settings,
       label: "Settings",
       action: () => navigate("/client/settings"),
-    },
-    {
-      icon: HelpCircle,
-      label: "Help & Support",
-      action: () => {},
     },
   ];
 
@@ -134,14 +135,12 @@ export function ProfileScreen() {
             <p className="text-xs text-gray-500 dark:text-gray-400">Lifetime Points</p>
           </div>
           <div className="bg-gradient-to-br from-[#f5f0fc] to-[#f5e6c3]/30 dark:from-indigo-900/30 dark:to-amber-900/30 rounded-2xl p-4 text-center border border-transparent dark:border-gray-700">
-            {/* No referrals endpoint yet */}
-            <h3 className="text-2xl mb-1 text-[#2d2d2d] dark:text-gray-100">0</h3>
+            <h3 className="text-2xl mb-1 text-[#2d2d2d] dark:text-gray-100">{referralsCompleted}</h3>
             <p className="text-xs text-gray-500 dark:text-gray-400">Referrals</p>
           </div>
           <div className="bg-gradient-to-br from-[#f5e6c3]/30 to-[#fef3f7] dark:from-amber-900/30 dark:to-pink-900/30 rounded-2xl p-4 text-center border border-transparent dark:border-gray-700">
-            {/* No visits endpoint yet */}
-            <h3 className="text-2xl mb-1 text-[#2d2d2d] dark:text-gray-100">0</h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Visits</p>
+            <h3 className="text-2xl mb-1 text-[#2d2d2d] dark:text-gray-100">{appointmentCount}</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Appointments</p>
           </div>
         </div>
 
