@@ -58,8 +58,16 @@ export function ClientHome() {
 
   const featuredSalons = (salons ?? []).slice(0, 3);
   const getSalonName = (salonId: string) => salons?.find((s) => s.id === salonId)?.name ?? "Unknown Salon";
+  // There's no "completed" appointment status in this app - a confirmed
+  // appointment stays "confirmed" forever once its date passes, so this
+  // card would otherwise keep showing a long-past booking as "upcoming"
+  // indefinitely. Only ever surface one that's actually still ahead of now.
   const nextAppointment = appointments
-    .filter((a) => a.status === "pending" || a.status === "confirmed")
+    .filter(
+      (a) =>
+        (a.status === "pending" || a.status === "confirmed") &&
+        new Date(`${a.date}T${a.time}`) >= new Date()
+    )
     .sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`))[0];
 
   return (
