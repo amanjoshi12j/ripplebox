@@ -211,6 +211,17 @@ export function LoginScreen() {
               Sign up
             </button>
           </p>
+
+          {/* Deliberately small/muted, not a button - this is only for the
+              handful of real admin accounts (provisioned directly via AWS,
+              never through signup), not something a regular user needs to
+              notice. */}
+          <button
+            onClick={() => navigate("/admin/login")}
+            className="text-center mt-6 text-xs text-gray-300 dark:text-gray-600 hover:text-gray-400 dark:hover:text-gray-500 mx-auto block"
+          >
+            Admin
+          </button>
         </div>
       </div>
     );
