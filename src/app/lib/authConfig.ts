@@ -32,7 +32,9 @@ const client = new CognitoIdentityProviderClient({
   credentials: { accessKeyId: "unused", secretAccessKey: "unused" },
 });
 
-export type UserRole = "client" | "salon_owner";
+// "admin" is never chosen at signup - see AuthContext.tsx's decodeIdToken,
+// which derives it from Cognito group membership instead of this attribute.
+export type UserRole = "client" | "salon_owner" | "admin";
 
 export interface SignUpParams {
   email: string;

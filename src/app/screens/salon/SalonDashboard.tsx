@@ -139,6 +139,13 @@ export function SalonDashboard() {
       </div>
 
       <div className="px-6 mt-6">
+        {salon.isSuspended && (
+          <div className="flex items-start gap-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-4 mb-6">
+            <p className="text-sm text-red-700 dark:text-red-400">
+              Your salon is currently suspended by RippleBox and won't appear to clients. Contact RippleBox support if you think this is a mistake.
+            </p>
+          </div>
+        )}
         {/* Quick stats */}
         <div className="grid grid-cols-2 gap-3 mb-6">
           {statCards.map((stat, index) => {

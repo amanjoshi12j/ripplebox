@@ -48,6 +48,12 @@ CREATE TABLE salons (
     reward_multiplier   NUMERIC(3,2) NOT NULL DEFAULT 1.0,
     rating              NUMERIC(2,1),
     review_count        INTEGER NOT NULL DEFAULT 0,
+    -- Platform-admin-only kill switch (see backend/src/shared/adminAuth.ts).
+    -- A suspended salon is hidden from the public GET /salons listing so
+    -- clients can no longer find or book it - the owner can still sign in
+    -- and see the suspended state on their own dashboard, but nothing else
+    -- is blocked in v1 (deliberately narrow first cut, see admin panel).
+    is_suspended        BOOLEAN NOT NULL DEFAULT false,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

@@ -7,9 +7,13 @@ export async function getSalons(): Promise<APIGatewayProxyResultV2> {
   // db.ts helper, and salon_services is small enough that fetching it whole
   // is simpler than adding array-parameter/array-result handling for it.
   const [salonRows, serviceRows, productRows] = await Promise.all([
+    // Suspended salons (admin panel kill switch) are excluded from the
+    // public listing entirely - a suspended salon shouldn't be findable or
+    // bookable by clients, even though its owner can still sign in.
     query(
       `SELECT id, name, address, latitude, longitude, description, image_url, reward_multiplier, rating, review_count
        FROM salons
+       WHERE is_suspended = false
        ORDER BY name`
     ),
     query(`SELECT id, salon_id, name, price, points_value FROM salon_services ORDER BY created_at`),

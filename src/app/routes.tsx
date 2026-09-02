@@ -33,6 +33,13 @@ import { CampaignCreation } from "./screens/salon/CampaignCreation";
 import { SalonSettings } from "./screens/salon/SalonSettings";
 import { BusinessInfoScreen } from "./screens/salon/BusinessInfoScreen";
 
+// Admin screens
+import { AdminLayout } from "./layouts/AdminLayout";
+import { AdminLoginScreen } from "./screens/admin/AdminLoginScreen";
+import { AdminDashboard } from "./screens/admin/AdminDashboard";
+import { AdminSalons } from "./screens/admin/AdminSalons";
+import { AdminUsers } from "./screens/admin/AdminUsers";
+
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -53,6 +60,10 @@ export const router = createBrowserRouter([
   {
     path: "/forgot-password",
     element: <ForgotPasswordScreen />,
+  },
+  {
+    path: "/admin/login",
+    element: <AdminLoginScreen />,
   },
   {
     element: <RequireAuth role="client" />,
@@ -93,6 +104,20 @@ export const router = createBrowserRouter([
           { path: "campaigns", element: <CampaignCreation /> },
           { path: "settings", element: <SalonSettings /> },
           { path: "business-info", element: <BusinessInfoScreen /> },
+        ],
+      },
+    ],
+  },
+  {
+    element: <RequireAuth role="admin" />,
+    children: [
+      {
+        path: "/admin",
+        element: <AdminLayout />,
+        children: [
+          { index: true, element: <AdminDashboard /> },
+          { path: "salons", element: <AdminSalons /> },
+          { path: "users", element: <AdminUsers /> },
         ],
       },
     ],

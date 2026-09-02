@@ -42,6 +42,7 @@ import {
 } from "./handlers/appointments";
 import { createPaymentIntent, getDiscountPreview } from "./handlers/payments";
 import { getUploadUrl } from "./handlers/uploads";
+import { getAdminStats, getAdminSalons, updateAdminSalon, getAdminUsers } from "./handlers/admin";
 import { HttpError } from "../shared/httpError";
 
 type RouteHandler = (
@@ -102,6 +103,10 @@ const routes: Record<string, RouteHandler> = {
   "PATCH /me/avatar": updateMyAvatar,
   "PATCH /salon/me/logo": updateSalonLogo,
   "PATCH /salon/me/location": updateSalonLocation,
+  "GET /admin/stats": getAdminStats,
+  "GET /admin/salons": getAdminSalons,
+  "PATCH /admin/salons/{salonId}": updateAdminSalon,
+  "GET /admin/users": getAdminUsers,
 };
 
 export async function handler(

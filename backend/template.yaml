@@ -522,6 +522,30 @@ Resources:
             ApiId: !Ref HttpApi
             Path: /salon/me/location
             Method: patch
+        GetAdminStats:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /admin/stats
+            Method: get
+        GetAdminSalons:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /admin/salons
+            Method: get
+        UpdateAdminSalon:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /admin/salons/{salonId}
+            Method: patch
+        GetAdminUsers:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /admin/users
+            Method: get
     Metadata:
       BuildMethod: esbuild
       BuildProperties:

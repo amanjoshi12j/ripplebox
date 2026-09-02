@@ -17,10 +17,19 @@ function decodeIdToken(idToken: string): DecodedClaims {
   const payload = idToken.split(".")[1];
   const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
   const claims = JSON.parse(json);
+
+  // Admin is Cognito Group membership, not the custom:role attribute -
+  // client/salon_owner are self-chosen at signup, but admin must never be
+  // settable that way. Decoding the raw ID token client-side gives a real
+  // JSON array here (unlike the flattened "[Admins]" string form the API
+  // Gateway JWT authorizer hands backend handlers - see adminAuth.ts).
+  const groups = (claims["cognito:groups"] as string[] | undefined) ?? [];
+  const role: UserRole = groups.includes("Admins") ? "admin" : (claims["custom:role"] as UserRole) ?? "client";
+
   return {
     sub: claims.sub,
     email: claims.email,
-    role: (claims["custom:role"] as UserRole) ?? "client",
+    role,
     exp: claims.exp,
   };
 }

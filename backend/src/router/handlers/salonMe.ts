@@ -7,7 +7,7 @@ import { HttpError } from "../../shared/httpError";
 
 async function fetchSalonMeResponse(ownerId: string) {
   const rows = await query(
-    `SELECT id, name, address, latitude, longitude, phone, email, description, image_url, reward_multiplier, rating, review_count
+    `SELECT id, name, address, latitude, longitude, phone, email, description, image_url, reward_multiplier, rating, review_count, is_suspended
      FROM salons
      WHERE owner_user_id = :ownerId::uuid`,
     { ownerId }
@@ -28,6 +28,11 @@ async function fetchSalonMeResponse(ownerId: string) {
     rewardMultiplier: salon.reward_multiplier,
     rating: salon.rating,
     reviewCount: salon.review_count,
+    // Set only by the admin panel - see backend/src/shared/adminAuth.ts. The
+    // owner can still sign in and use everything else; this just tells them
+    // (and the dashboard banner) that their salon is currently hidden from
+    // clients.
+    isSuspended: salon.is_suspended,
   };
 }
 

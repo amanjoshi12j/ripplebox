@@ -138,6 +138,10 @@ export interface SalonMeResponse {
   rewardMultiplier: string;
   rating: string | null;
   reviewCount: number;
+  // Set only via the admin panel - see backend/src/shared/adminAuth.ts. A
+  // suspended salon is hidden from the public salon list; the owner can
+  // still sign in, which is how they'd see this and know something's wrong.
+  isSuspended: boolean;
 }
 
 export function getSalonMe(idToken: string): Promise<SalonMeResponse> {
@@ -601,4 +605,67 @@ export function getDiscountPreview(
   const params = new URLSearchParams({ salonId, serviceId });
   if (redemptionId) params.set("redemptionId", redemptionId);
   return apiFetch<DiscountPreview>(`/discount-preview?${params.toString()}`, { idToken });
+}
+
+// ---------- Admin panel ----------
+// Every one of these requires the caller's account to be in the Cognito
+// "Admins" group (see backend/src/shared/adminAuth.ts) - not a self-settable
+// role like client/salon_owner, so there's no signup flow that leads here.
+
+export interface AdminStats {
+  totalSalons: number;
+  totalClients: number;
+  totalSalonOwners: number;
+  totalAppointments: number;
+  totalRevenue: string;
+  totalPointsIssued: number;
+  totalRedemptions: number;
+  activeCampaigns: number;
+}
+
+export function getAdminStats(idToken: string): Promise<AdminStats> {
+  return apiFetch<AdminStats>("/admin/stats", { idToken });
+}
+
+export interface AdminSalonSummary {
+  id: string;
+  name: string;
+  email: string | null;
+  createdAt: string;
+  isSuspended: boolean;
+  ownerId: string;
+  ownerName: string;
+  ownerEmail: string;
+  clientCount: number;
+  rewardsIssued: number;
+  appointmentCount: number;
+  totalRevenue: string;
+}
+
+export function getAdminSalons(idToken: string, q?: string): Promise<AdminSalonSummary[]> {
+  const params = q ? `?${new URLSearchParams({ q }).toString()}` : "";
+  return apiFetch<AdminSalonSummary[]>(`/admin/salons${params}`, { idToken });
+}
+
+export function setAdminSalonSuspended(
+  idToken: string,
+  salonId: string,
+  isSuspended: boolean
+): Promise<{ id: string; isSuspended: boolean }> {
+  return apiFetch(`/admin/salons/${salonId}`, { idToken, method: "PATCH", body: { isSuspended } });
+}
+
+export interface AdminUserSummary {
+  id: string;
+  name: string;
+  email: string;
+  role: "client" | "salon_owner";
+  createdAt: string;
+  salonId: string | null;
+  salonName: string | null;
+}
+
+export function getAdminUsers(idToken: string, q?: string): Promise<AdminUserSummary[]> {
+  const params = q ? `?${new URLSearchParams({ q }).toString()}` : "";
+  return apiFetch<AdminUserSummary[]>(`/admin/users${params}`, { idToken });
 }
