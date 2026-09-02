@@ -60,8 +60,16 @@ export function ChatBubble() {
         // Later, status tracking) - the bot used to have no idea these
         // existed and would wrongly tell users to "check with the salon
         // directly". Soonest upcoming one only, to keep this a short string.
+        // Same date-passed check as ClientHome's Upcoming Appointment card -
+        // without it, a long-past confirmed appointment (no "completed"
+        // status exists in this app) would keep being reported to the bot
+        // as "upcoming" forever.
         const upcoming = appointments
-          .filter((a) => a.status === "pending" || a.status === "confirmed")
+          .filter(
+            (a) =>
+              (a.status === "pending" || a.status === "confirmed") &&
+              new Date(`${a.date}T${a.time}`) >= new Date()
+          )
           .sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`))[0];
         const nextAppointment = upcoming
           ? `${upcoming.serviceName} at ${upcoming.salonName} on ${upcoming.date} at ${upcoming.time} (${upcoming.status}, ${upcoming.paymentMethod === "pay_now" ? "paid" : "pay at salon"})`
